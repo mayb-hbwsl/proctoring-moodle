@@ -106,22 +106,3 @@
     pointer-events: none;
 }
 
-.timadey-debug-log {
-    position: fixed;
-    bottom: 210px;
-    right: 20px;
-    width: 350px;
-    max-height: 200px;
-    background: rgba(0, 0, 0, 0.9);
-    color: #00ff00;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    padding: 8px;
-    border-radius: 6px;
-    border: 1px solid #333;
-    z-index: 99999;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
-    line-height: 1.4;
-}

@@ -2,7 +2,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "node patch-proctor.js && vite build",
+    "postinstall": "node patch-proctor.js"
   },
   "dependencies": {
     "@timadey/proctor": "^1.2.5"

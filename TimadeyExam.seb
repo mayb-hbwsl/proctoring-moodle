@@ -7,7 +7,7 @@
 	<!-- START URL - CHANGE THIS TO YOUR MOODLE URL -->
 	<!-- ========================================= -->
 	<key>startURL</key>
-	<string>http://localhost/login/index.php</string>
+	<string>http://learn.hbwsl.com/login/index.php</string>
 
 	<!-- ========================================= -->
 	<!-- MEDIA CAPTURE (Critical for Timadey AI)   -->
