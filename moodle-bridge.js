@@ -19,10 +19,13 @@ class MoodleProctorBridge {
     }
 
     async init() {
-        // Only activate on quiz attempt pages
-        const isQuizPage = window.location.pathname.includes('/mod/quiz/attempt.php');
+        // Activate on quiz attempt pages (standard quiz + adaptive quiz)
+        const path = window.location.pathname;
+        const isQuizPage = path.includes('/mod/quiz/attempt.php') 
+                        || path.includes('/mod/adaptivequiz/attempt.php');
+        const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
 
-        if (!isQuizPage) {
+        if (!isQuizPage && !isTestMode) {
             console.log('[Timadey] Not a quiz page. Dormant.');
             return;
         }

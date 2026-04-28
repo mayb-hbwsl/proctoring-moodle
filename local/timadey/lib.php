@@ -9,9 +9,10 @@ defined('MOODLE_INTERNAL') || die();
 function local_timadey_before_standard_html_head() {
     global $PAGE;
 
-    // Only inject on quiz attempt pages
+    // Only inject on quiz attempt pages (standard + adaptive)
     $path = $PAGE->url->get_path();
-    if (strpos($path, '/mod/quiz/attempt.php') === false) {
+    if (strpos($path, '/mod/quiz/attempt.php') === false &&
+        strpos($path, '/mod/adaptivequiz/attempt.php') === false) {
         return '';
     }
 
