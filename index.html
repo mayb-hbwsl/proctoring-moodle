@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Proctoring Engine - Test Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <h1>May<span>Proctor</span></h1>
+            </div>
+            <div class="status-badge" id="engine-status">Initializing...</div>
+        </header>
+
+        <main>
+            <div class="left-panel">
+                <div class="video-container glass">
+                    <video id="webcam" autoplay playsinline muted></video>
+                    <div class="overlay">
+                        <div class="detection-box"></div>
+                    </div>
+                    <div class="controls">
+                        <button id="start-btn" class="primary-btn">Start Session</button>
+                        <button id="stop-btn" class="secondary-btn" disabled>Stop</button>
+                    </div>
+                </div>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card glass">
+                        <h3>Suspicion Score</h3>
+                        <div class="score-display">
+                            <span id="suspicion-score">0</span>
+                            <span class="total">/1000</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="score-fill" class="fill"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <h3>Session Time</h3>
+                        <div id="timer" class="value">00:00:00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel glass">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="logs">Incident Logs</button>
+                    <button class="tab-btn" data-tab="stats">Real-time Stats</button>
+                </div>
+                
+                <div class="tab-content" id="logs-tab">
+                    <div id="event-logs" class="logs-container">
+                        <div class="log-entry system">System ready. Click Start to begin monitoring.</div>
+                    </div>
+                </div>
+
+                <div class="tab-content hidden" id="stats-tab">
+                    <div class="stats-container">
+                        <div class="stat-item">
+                            <label>Faces Detected:</label>
+                            <span id="stat-faces">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Gaze Direction:</label>
+                            <span id="stat-gaze">Center</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Looking Away:</label>
+                            <span id="stat-away">No</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Mouth Moving:</label>
+                            <span id="stat-mouth">No</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Audio Level:</label>
+                            <span id="stat-audio">-100 dB</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Tab Switches:</label>
+                            <span id="stat-tabs">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Window Mode:</label>
+                            <span id="stat-window">Windowed</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Window Focus:</label>
+                            <span id="stat-focus">Active</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Monitors:</label>
+                            <span id="stat-monitors">Detecting...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Security Overlay For Alerts -->
+    <div id="security-alert" class="security-overlay hidden">
+        <div class="alert-content">
+            <div class="alert-icon">⚠️</div>
+            <h2>Security Violation</h2>
+            <p id="alert-message">Please return to fullscreen to continue.</p>
+            <button id="resume-btn" class="primary-btn">Return to Session</button>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

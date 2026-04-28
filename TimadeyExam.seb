@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+	<!-- ========================================= -->
+	<!-- START URL - CHANGE THIS TO YOUR MOODLE URL -->
+	<!-- ========================================= -->
+	<key>startURL</key>
+	<string>http://localhost/login/index.php</string>
+
+	<!-- ========================================= -->
+	<!-- MEDIA CAPTURE (Critical for Timadey AI)   -->
+	<!-- ========================================= -->
+	<key>allowVideoCapture</key>
+	<true/>
+	<key>allowAudioCapture</key>
+	<true/>
+
+	<!-- ========================================= -->
+	<!-- BROWSER SETTINGS                          -->
+	<!-- ========================================= -->
+	<key>browserViewMode</key>
+	<integer>1</integer>
+	<key>mainBrowserWindowWidth</key>
+	<string>100%</string>
+	<key>mainBrowserWindowHeight</key>
+	<string>100%</string>
+	<key>mainBrowserWindowPositioning</key>
+	<integer>1</integer>
+	<key>enableBrowserWindowToolbar</key>
+	<false/>
+	<key>hideBrowserWindowToolbar</key>
+	<true/>
+	<key>showMenuBar</key>
+	<false/>
+	<key>showTaskBar</key>
+	<true/>
+	<key>taskBarHeight</key>
+	<integer>40</integer>
+	<key>showReloadButton</key>
+	<true/>
+	<key>showTime</key>
+	<true/>
+	<key>showInputLanguage</key>
+	<true/>
+	<key>enableZoomPage</key>
+	<false/>
+	<key>enableZoomText</key>
+	<false/>
+	<key>allowSpellCheck</key>
+	<false/>
+	<key>allowDictionaryLookup</key>
+	<false/>
+
+	<!-- ========================================= -->
+	<!-- SECURITY - THE SHIELD                     -->
+	<!-- ========================================= -->
+	<!-- Block switching to other apps -->
+	<key>allowSwitchToApplications</key>
+	<false/>
+	<!-- Block screenshots -->
+	<key>enablePrintScreen</key>
+	<false/>
+	<key>allowScreenCapture</key>
+	<true/>
+	<!-- Block clipboard -->
+	<key>enableClipboard</key>
+	<false/>
+	<!-- Block virtual machines -->
+	<key>allowVirtualMachine</key>
+	<false/>
+	<!-- Block screen sharing -->
+	<key>allowScreenSharing</key>
+	<false/>
+	<!-- Block HDMI / external displays -->
+	<key>allowDisplayMirroring</key>
+	<false/>
+	<key>detectStoppedProcess</key>
+	<true/>
+	<!-- Disable developer tools -->
+	<key>allowDeveloperConsole</key>
+	<false/>
+	<!-- Disable right-click context menu -->
+	<key>enableRightMouse</key>
+	<false/>
+
+	<!-- ========================================= -->
+	<!-- KEYBOARD SHORTCUT BLOCKING                -->
+	<!-- ========================================= -->
+	<key>enableAltTab</key>
+	<false/>
+	<key>enableAltF4</key>
+	<false/>
+	<key>enableCtrlEsc</key>
+	<false/>
+	<key>enableEsc</key>
+	<false/>
+	<key>enableF1</key>
+	<false/>
+	<key>enableF2</key>
+	<false/>
+	<key>enableF3</key>
+	<false/>
+	<key>enableF4</key>
+	<false/>
+	<key>enableF5</key>
+	<false/>
+	<key>enableF6</key>
+	<false/>
+	<key>enableF7</key>
+	<false/>
+	<key>enableF8</key>
+	<false/>
+	<key>enableF9</key>
+	<false/>
+	<key>enableF10</key>
+	<false/>
+	<key>enableF11</key>
+	<false/>
+	<key>enableF12</key>
+	<false/>
+	<key>enableStartMenu</key>
+	<false/>
+
+	<!-- ========================================= -->
+	<!-- NETWORK / URL FILTERING                   -->
+	<!-- ========================================= -->
+	<!-- Allow our proctor bundle server -->
+	<key>URLFilterEnable</key>
+	<false/>
+	<key>URLFilterEnableContentFilter</key>
+	<false/>
+
+	<!-- ========================================= -->
+	<!-- DOWNLOADS / UPLOADS                       -->
+	<!-- ========================================= -->
+	<key>allowDownUploads</key>
+	<false/>
+	<key>downloadDirectoryOSX</key>
+	<string></string>
+
+	<!-- ========================================= -->
+	<!-- QUIT / PASSWORD                           -->
+	<!-- ========================================= -->
+	<key>allowQuit</key>
+	<true/>
+	<key>quitURL</key>
+	<string></string>
+	<key>hashedQuitPassword</key>
+	<string></string>
+	<key>allowPreferencesWindow</key>
+	<false/>
+
+	<!-- ========================================= -->
+	<!-- EXAM KEY (Moodle will verify this)        -->
+	<!-- ========================================= -->
+	<key>examSessionClearCookiesOnEnd</key>
+	<true/>
+	<key>examSessionClearCookiesOnStart</key>
+	<true/>
+
+</dict>
+</plist>

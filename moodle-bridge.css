@@ -1,0 +1,127 @@
+/* Styling for the floating widget injected into Moodle */
+.timadey-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 240px;
+    height: 180px;
+    background: #000;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    z-index: 99999; /* Ensure it's above everything in Moodle */
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+#timadey-webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* Mirror */
+}
+
+.timadey-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 4px solid transparent; /* Used for score indication */
+    pointer-events: none;
+    transition: border-color 0.3s ease;
+}
+
+.timadey-status {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-size: 12px;
+    padding: 6px;
+    text-align: center;
+}
+
+.timadey-status.state-error { color: #ff4d4f; }
+.timadey-status.state-warning { color: #faad14; }
+.timadey-status.state-success { color: #52c41a; }
+
+/* Styling for the quiz lock screen */
+.timadey-lock-screen {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.timadey-lock-screen .lock-box {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    max-width: 400px;
+}
+
+.timadey-lock-screen h2 {
+    color: #ff4d4f;
+    margin-top: 0;
+}
+
+.timadey-lock-screen button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: #1890ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.timadey-score {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.timadey-recent-event {
+    position: absolute;
+    top: 35px;
+    right: 5px;
+    left: 5px;
+    text-align: right;
+    color: #ff4d4f;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px black;
+    pointer-events: none;
+}
+
+.timadey-debug-log {
+    position: fixed;
+    bottom: 210px;
+    right: 20px;
+    width: 350px;
+    max-height: 200px;
+    background: rgba(0, 0, 0, 0.9);
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    z-index: 99999;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.4;
+}

@@ -1,0 +1,4 @@
+node_modules/
+dist-moodle/test.html
+.DS_Store
+*.log
