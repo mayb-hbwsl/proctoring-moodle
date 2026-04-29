@@ -106,3 +106,71 @@
     pointer-events: none;
 }
 
+/* Loading Overlay */
+.timadey-loading-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    z-index: 100001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.5s ease;
+}
+
+.timadey-loading-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.loading-content {
+    text-align: center;
+    max-width: 500px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #1890ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-content h2 {
+    color: #1a1a1a;
+    margin-bottom: 10px;
+}
+
+.loading-content p {
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.loading-content .small {
+    font-size: 11px;
+    color: #999;
+}
+
+#loading-status-subtext {
+    margin-top: 20px;
+    font-weight: bold;
+    color: #1890ff;
+}
+
+/* Disable interactions when locked */
+body.timadey-locked {
+    overflow: hidden !important;
+}
+
+body.timadey-locked .region-main {
+    filter: blur(5px);
+    pointer-events: none;
+}

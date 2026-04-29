@@ -35,6 +35,9 @@ class MoodleProctorBridge {
         // Inject the webcam widget UI
         this.injectUI();
 
+        // Show full-screen loading overlay
+        this.showLoadingScreen();
+
         try {
             // SEB compatibility: pre-create GL context if OffscreenCanvas is missing
             if (typeof OffscreenCanvas === 'undefined') {
@@ -161,6 +164,9 @@ class MoodleProctorBridge {
             this.engine.start(this.videoElement);
             this.isMonitoring = true;
             this.updateStatus('Monitoring Active', 'success');
+            
+            // Reveal the quiz
+            this.hideLoadingScreen();
 
         } catch (error) {
             console.error('[Timadey] Camera access denied:', error);
@@ -205,10 +211,47 @@ class MoodleProctorBridge {
         }
     }
 
+    showLoadingScreen() {
+        if (document.getElementById('timadey-loading-overlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'timadey-loading-overlay';
+        overlay.className = 'timadey-loading-overlay';
+        overlay.innerHTML = `
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <h2>Securing Exam Environment...</h2>
+                <p>Initializing AI Proctoring and verifying system integrity.</p>
+                <p class="small">This may take up to a minute on the first attempt.</p>
+                <div id="loading-status-subtext">Waiting for system...</div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        
+        // Disable quiz interactions
+        document.body.classList.add('timadey-locked');
+    }
+
+    hideLoadingScreen() {
+        const overlay = document.getElementById('timadey-loading-overlay');
+        if (overlay) {
+            overlay.classList.add('fade-out');
+            setTimeout(() => {
+                overlay.remove();
+                document.body.classList.remove('timadey-locked');
+            }, 500);
+        }
+    }
+
     updateStatus(message, state = 'info') {
-        if (!this.statusText) return;
-        this.statusText.textContent = message;
-        this.statusText.className = `timadey-status state-${state}`;
+        if (this.statusText) {
+            this.statusText.textContent = message;
+            this.statusText.className = `timadey-status state-${state}`;
+        }
+        
+        // Also update the subtext on the loading screen if visible
+        const subtext = document.getElementById('loading-status-subtext');
+        if (subtext) subtext.textContent = message;
     }
 
     async logIncident(message, severity) {
