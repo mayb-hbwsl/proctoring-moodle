@@ -53,11 +53,7 @@ class MoodleProctorBridge {
                 }
             }
 
-            // SEB clears cookies on start which can corrupt the IndexedDB model cache.
-            // Wipe it clean before we begin so MediaPipe loads fresh models.
-            await this.clearModelCache();
-
-            this.updateStatus('Initializing AI...');
+            this.updateStatus('Loading AI Models...');
             this.engine = ProctoringEngine.getInstance({
                 enableVisualDetection: true,
                 enableAudioMonitoring: true,
@@ -75,24 +71,6 @@ class MoodleProctorBridge {
             });
 
             await this.engine.initialize();
-            
-            // Retry if init failed silently (known issue with the library)
-            if (!this.engine.isInitialized) {
-                console.warn('[Timadey] Init failed silently, retrying...');
-                ProctoringEngine.instance = null;
-                this.engine = ProctoringEngine.getInstance({
-                    enableVisualDetection: true,
-                    enableAudioMonitoring: true,
-                    enablePatternDetection: true,
-                    enableBrowserTelemetry: true,
-                    detectionFPS: 10,
-                    onEvent: (event) => this.handleEvent(event),
-                    onBehavioralPattern: (pattern) => this.handlePattern(pattern),
-                    onStatusChange: (status) => this.updateStatus(status),
-                    onError: (error) => console.error('[Timadey] Retry error:', error)
-                });
-                await this.engine.initialize();
-            }
 
             if (!this.engine.isInitialized) {
                 console.error('[Timadey] FATAL: Engine could not initialize.');
