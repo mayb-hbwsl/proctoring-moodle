@@ -4,23 +4,19 @@ defined('MOODLE_INTERNAL') || die();
 
 /**
  * Inject the Timadey proctoring script into quiz attempt pages.
- * This hook is called by Moodle before rendering the page head.
+ * This standard Moodle hook is called on every page before the footer is rendered.
  */
-function local_timadey_before_standard_html_head() {
+function local_timadey_before_footer() {
     global $PAGE;
 
     // Only inject on quiz attempt pages (standard + adaptive)
     $path = $PAGE->url->get_path();
     if (strpos($path, '/mod/quiz/attempt.php') === false &&
         strpos($path, '/mod/adaptivequiz/attempt.php') === false) {
-        return '';
+        return;
     }
 
-    // Load the proctoring CSS and JS bundle
-    $cssurl = new moodle_url('/local/timadey/assets/moodle-proctor-bundle.css');
-    $jsurl = new moodle_url('/local/timadey/assets/moodle-proctor-bundle.iife.js');
-
-    // Return the HTML to inject into <head>
-    return '<link rel="stylesheet" href="' . $cssurl->out() . '">' .
-           '<script src="' . $jsurl->out() . '" defer></script>';
+    // Load the proctoring CSS and JS bundle using standard Moodle requirements
+    $PAGE->requires->css(new moodle_url('/local/timadey/assets/moodle-proctor-bundle.css'));
+    $PAGE->requires->js(new moodle_url('/local/timadey/assets/moodle-proctor-bundle.iife.js'), true);
 }

@@ -24,10 +24,12 @@ if (!$data || empty($data['message'])) {
 }
 
 // Verify the Moodle session key to prevent CSRF
-// Note: sesskey validation is optional here since require_login() already handles auth
-// but it's good practice for POST endpoints
+// Note: require_sesskey() doesn't work for JSON payloads, so we verify manually
 if (!empty($data['sesskey'])) {
-    require_sesskey();
+    if ($data['sesskey'] !== sesskey()) {
+        http_response_code(403);
+        die(json_encode(['error' => 'Invalid session key']));
+    }
 }
 
 global $DB, $USER;
