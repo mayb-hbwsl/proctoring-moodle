@@ -11,7 +11,7 @@ class MoodleProctorBridge {
         this.recentEventText = null;
         this.isMonitoring = false;
         this.eventTimeout = null;
-        
+
         // Moodle incident logging endpoint
         this.moodleApiEndpoint = '/local/timadey/log_incident.php';
 
@@ -21,8 +21,8 @@ class MoodleProctorBridge {
     async init() {
         // Activate on quiz attempt pages (standard quiz + adaptive quiz)
         const path = window.location.pathname;
-        const isQuizPage = path.includes('/mod/quiz/attempt.php') 
-                        || path.includes('/mod/adaptivequiz/attempt.php');
+        const isQuizPage = path.includes('/mod/quiz/attempt.php')
+            || path.includes('/mod/adaptivequiz/attempt.php');
         const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
 
         if (!isQuizPage && !isTestMode) {
@@ -46,9 +46,9 @@ class MoodleProctorBridge {
                 mpCanvas.height = 480;
                 mpCanvas.style.cssText = 'position:fixed;top:-9999px;left:-9999px;pointer-events:none;';
                 document.body.appendChild(mpCanvas);
-                const mpGl = mpCanvas.getContext('webgl2', { preserveDrawingBuffer: true }) 
-                          || mpCanvas.getContext('webgl', { preserveDrawingBuffer: true });
-                
+                const mpGl = mpCanvas.getContext('webgl2', { preserveDrawingBuffer: true })
+                    || mpCanvas.getContext('webgl', { preserveDrawingBuffer: true });
+
                 if (!window.Module) window.Module = {};
                 window.Module.canvas = mpCanvas;
                 if (mpGl) {
@@ -63,7 +63,7 @@ class MoodleProctorBridge {
                 enablePatternDetection: true,
                 enableBrowserTelemetry: true,
                 detectionFPS: 10,
-                
+
                 onEvent: (event) => this.handleEvent(event),
                 onBehavioralPattern: (pattern) => this.handlePattern(pattern),
                 onStatusChange: (status) => this.updateStatus(status),
@@ -83,7 +83,7 @@ class MoodleProctorBridge {
 
             // Start camera and monitoring
             await this.startMonitoring();
-            
+
             // Keep score UI in sync with state changes
             this.engine.stateManager.subscribe(() => this.updateScoreUI());
 
@@ -146,11 +146,11 @@ class MoodleProctorBridge {
     async startMonitoring() {
         try {
             this.updateStatus('Requesting Camera...', 'warning');
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            const stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 320, height: 240 },
-                audio: true 
+                audio: true
             });
-            
+
             this.videoElement.srcObject = stream;
             await new Promise(resolve => {
                 this.videoElement.onloadedmetadata = () => this.videoElement.play();
@@ -164,7 +164,7 @@ class MoodleProctorBridge {
             this.engine.start(this.videoElement);
             this.isMonitoring = true;
             this.updateStatus('Monitoring Active', 'success');
-            
+
             // Reveal the quiz
             this.hideLoadingScreen();
 
@@ -201,10 +201,10 @@ class MoodleProctorBridge {
         if (this.scoreText) {
             this.scoreText.textContent = `Score: ${score}`;
         }
-        
+
         if (score > 500) {
             this.overlay.style.borderColor = '#ff4d4f';
-        } else if (score > 200) {
+        } else if (score > 250) {
             this.overlay.style.borderColor = '#faad14';
         } else {
             this.overlay.style.borderColor = '#52c41a';
@@ -222,12 +222,13 @@ class MoodleProctorBridge {
                 <div class="spinner"></div>
                 <h2>Securing Exam Environment...</h2>
                 <p>Initializing AI Proctoring and verifying system integrity.</p>
-                <p class="small">This may take up to a minute on the first attempt.</p>
+                <p class="small">This system was developed by a crazy intern! So please have patience....</p>
                 <div id="loading-status-subtext">Waiting for system...</div>
+                
             </div>
         `;
         document.body.appendChild(overlay);
-        
+
         // Disable quiz interactions
         document.body.classList.add('timadey-locked');
     }
@@ -248,7 +249,7 @@ class MoodleProctorBridge {
             this.statusText.textContent = message;
             this.statusText.className = `timadey-status state-${state}`;
         }
-        
+
         // Also update the subtext on the loading screen if visible
         const subtext = document.getElementById('loading-status-subtext');
         if (subtext) subtext.textContent = message;
@@ -256,7 +257,7 @@ class MoodleProctorBridge {
 
     async logIncident(message, severity) {
         console.warn(`[Timadey Incident] ${message} (Severity: ${severity})`);
-        
+
         try {
             await fetch(this.moodleApiEndpoint, {
                 method: 'POST',
@@ -264,7 +265,6 @@ class MoodleProctorBridge {
                 body: JSON.stringify({
                     message,
                     severity,
-                    score: Math.round(this.engine.calculateSuspiciousScore() || 0),
                     timestamp: Date.now(),
                     sesskey: window.M?.cfg?.sesskey || '',
                     userid: window.M?.cfg?.userid || 0,
@@ -289,7 +289,7 @@ class MoodleProctorBridge {
             if (btn.tagName === 'INPUT') btn.value = "Camera Required to Continue";
             else btn.textContent = "Camera Required to Continue";
         });
-        
+
         const lockOverlay = document.createElement('div');
         lockOverlay.className = 'timadey-lock-screen';
         lockOverlay.innerHTML = `

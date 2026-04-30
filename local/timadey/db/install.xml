@@ -8,7 +8,6 @@
         <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Quiz attempt ID"/>
         <FIELD NAME="message" TYPE="text" NOTNULL="true" COMMENT="Description of the incident"/>
         <FIELD NAME="severity" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" COMMENT="Severity level 1-10"/>
-        <FIELD NAME="current_score" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="AI suspicion score at the time of incident"/>
         <FIELD NAME="eventtime" TYPE="int" LENGTH="13" NOTNULL="true" DEFAULT="0" COMMENT="JS timestamp (ms) when event occurred"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Unix timestamp when record was created"/>
       </FIELDS>
@@ -19,24 +18,6 @@
         <INDEX NAME="idx_userid" UNIQUE="false" FIELDS="userid"/>
         <INDEX NAME="idx_attemptid" UNIQUE="false" FIELDS="attemptid"/>
         <INDEX NAME="idx_severity" UNIQUE="false" FIELDS="severity"/>
-      </INDEXES>
-    </TABLE>
-    <TABLE NAME="local_timadey_scores" COMMENT="Aggregated proctoring scores per attempt">
-      <FIELDS>
-        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="final_score" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="The latest/final suspicion score"/>
-        <FIELD NAME="max_score" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="The peak suspicion score reached"/>
-        <FIELD NAME="status" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" COMMENT="0: Safe, 1: Review, 2: Flagged"/>
-        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <INDEX NAME="idx_attempt" UNIQUE="true" FIELDS="attemptid"/>
       </INDEXES>
     </TABLE>
   </TABLES>

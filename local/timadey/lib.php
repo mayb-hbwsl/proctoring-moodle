@@ -14,14 +14,6 @@ function local_timadey_before_footer() {
 
 // Hook 2: Navigation Hook (Runs on almost every page)
 function local_timadey_extend_navigation(global_navigation $nav) {
-    global $PAGE;
-    
-    // Add Report link for admins in the site administration or site menu
-    if (has_capability('moodle/site:config', context_system::instance())) {
-        $url = new moodle_url('/local/timadey/report.php');
-        $nav->add(get_string('reports', 'local_timadey'), $url, navigation_node::TYPE_SETTING, null, 'timadey_reports');
-    }
-
     local_timadey_inject_assets();
 }
 
