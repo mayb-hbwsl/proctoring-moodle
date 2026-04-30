@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timadey Proctor - Diagnostic Test</title>
+    <link rel="stylesheet" href="moodle-proctor-bundle.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #00ff88; }
+        .info { 
+            background: #16213e; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 10px 0;
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Timadey Proctor - Diagnostic Test Page</h1>
+    <div class="info">
+        <p>This page simulates a Moodle quiz page for testing. The proctor widget should appear in the bottom-right corner.</p>
+        <p>Check the green debug log above the widget for diagnostic info.</p>
+    </div>
+    <div class="info">
+        <h3>Fake Quiz Content</h3>
+        <p>Q1: What is 2 + 2?</p>
+        <input type="text" placeholder="Your answer...">
+        <br><br>
+        <button type="submit">Submit Answer</button>
+    </div>
+
+    <!-- Load the proctor bundle with ?test=1 to bypass quiz page check -->
+    <script src="moodle-proctor-bundle.iife.js"></script>
+    <script>
+        // Force the URL to have ?test=1 so the bridge activates
+        if (!window.location.search.includes('test=1')) {
+            window.location.search = '?test=1';
+        }
+    </script>
+</body>
+</html>
+</script>
+</body>
+</html>

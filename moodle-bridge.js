@@ -264,6 +264,7 @@ class MoodleProctorBridge {
                 body: JSON.stringify({
                     message,
                     severity,
+                    score: Math.round(this.engine.calculateSuspiciousScore() || 0),
                     timestamp: Date.now(),
                     sesskey: window.M?.cfg?.sesskey || '',
                     userid: window.M?.cfg?.userid || 0,

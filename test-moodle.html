@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodle Proctoring Test Page</title>
+    <!-- We load the actual bundle that will be used in Moodle -->
+    <link rel="stylesheet" href="local/timadey/assets/moodle-proctor-bundle.css">
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .quiz-container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .question { margin-bottom: 30px; padding: 20px; border-left: 5px solid #1890ff; background: #fafafa; }
+        .submit-btn { background: #52c41a; color: white; padding: 15px 30px; border: none; border-radius: 4px; font-size: 18px; cursor: pointer; }
+        .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        /* Moodle-like structure for the blur effect to target */
+        .region-main { transition: filter 0.5s ease; }
+    </style>
+</head>
+<body>
+    <div class="region-main">
+        <div class="quiz-container">
+            <h1>Adaptive Quiz Simulation</h1>
+            <p>Welcome to the secure exam. Please answer the questions below.</p>
+            
+            <div class="question">
+                <h3>Question 1: What is 2 + 2?</h3>
+                <input type="radio" name="q1" id="a1"> <label for="a1">3</label><br>
+                <input type="radio" name="q1" id="a2"> <label for="a2">4</label><br>
+                <input type="radio" name="q1" id="a3"> <label for="a3">5</label>
+            </div>
+
+            <div class="question">
+                <h3>Question 2: Describe the process of Photosynthesis.</h3>
+                <textarea rows="4" style="width: 100%;"></textarea>
+            </div>
+
+            <button type="submit" class="submit-btn">Submit Quiz Attempt</button>
+        </div>
+    </div>
+
+    <!-- Moodle Global Config Simulation -->
+    <script>
+        window.M = {
+            cfg: {
+                wwwroot: window.location.origin,
+                sesskey: 'test_sesskey',
+                userid: 123
+            }
+        };
+        
+        // Force the bridge to think it's a quiz page
+        // We override the pathname check in the bridge by appending ?test=1
+        if (!window.location.search.includes('test=1')) {
+            window.history.replaceState({}, '', '?test=1');
+        }
+    </script>
+
+    <!-- Load the proctoring bundle -->
+    <script src="local/timadey/assets/moodle-proctor-bundle.iife.js"></script>
+</body>
+</html>

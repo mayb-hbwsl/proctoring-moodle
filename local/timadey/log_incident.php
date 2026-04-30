@@ -40,15 +40,41 @@ $record->userid = $USER->id;
 $record->attemptid = intval($data['attemptid'] ?? 0);
 $record->message = clean_param($data['message'], PARAM_TEXT);
 $record->severity = intval($data['severity'] ?? 0);
+$record->current_score = intval($data['score'] ?? 0); // The AI suspicion score
 $record->eventtime = intval($data['timestamp'] ?? time() * 1000);
 $record->timecreated = time();
 
 // Store in the incidents table
 try {
     $DB->insert_record('local_timadey_incidents', $record);
+    
+    // Update the aggregate scores table
+    if ($record->attemptid > 0) {
+        $summary = $DB->get_record('local_timadey_scores', ['attemptid' => $record->attemptid]);
+        
+        if ($summary) {
+            $summary->final_score = $record->current_score;
+            if ($record->current_score > $summary->max_score) {
+                $summary->max_score = $record->current_score;
+            }
+            $summary->timemodified = time();
+            $DB->update_record('local_timadey_scores', $summary);
+        } else {
+            $summary = new stdClass();
+            $summary->userid = $record->userid;
+            $summary->attemptid = $record->attemptid;
+            $summary->final_score = $record->current_score;
+            $summary->max_score = $record->current_score;
+            $summary->status = 0; // Default to safe
+            $summary->timecreated = time();
+            $summary->timemodified = time();
+            $DB->insert_record('local_timadey_scores', $summary);
+        }
+    }
+    
     echo json_encode(['status' => 'ok']);
 } catch (Exception $e) {
-    // If the table doesn't exist yet (plugin not upgraded), log to Moodle's standard log
-    error_log('[Timadey] Incident: ' . $data['message'] . ' (severity: ' . $data['severity'] . ') user: ' . $USER->id);
-    echo json_encode(['status' => 'ok', 'fallback' => true]);
+    // Fallback logging
+    error_log('[Timadey] Incident: ' . $data['message'] . ' (score: ' . $record->current_score . ') user: ' . $USER->id);
+    echo json_encode(['status' => 'ok', 'fallback' => true, 'error' => $e->getMessage()]);
 }
