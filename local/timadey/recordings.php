@@ -1,0 +1,396 @@
+<?php
+require_once('../../config.php');
+require_login();
+if (!is_siteadmin()) {
+    throw new moodle_exception('accessdenied', 'admin');
+}
+
+global $DB, $CFG, $OUTPUT, $PAGE;
+
+$PAGE->set_url('/local/timadey/recordings.php');
+$PAGE->set_context(context_system::instance());
+$PAGE->set_title('Proctoring Recordings');
+
+$tmp_web = '/local/timadey/assets/tmp';
+$tmp_dir = __DIR__ . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'tmp';
+if (!is_dir($tmp_dir)) mkdir($tmp_dir, 0755, true);
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function timadey_find_ffmpeg() {
+    $candidates = [
+        'C:/Users/msacc/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1-full_build/bin/ffmpeg.exe',
+        '/usr/bin/ffmpeg',
+        '/usr/local/bin/ffmpeg',
+        '/opt/ffmpeg/bin/ffmpeg',
+    ];
+    foreach ($candidates as $p) {
+        if (file_exists($p)) return $p;
+    }
+    $out = []; $ret = 1;
+    @exec('which ffmpeg 2>/dev/null', $out, $ret);
+    if ($ret === 0 && !empty($out[0]) && file_exists(trim($out[0]))) return trim($out[0]);
+    return null;
+}
+
+// Returns true if file starts with WebM EBML magic bytes
+function timadey_is_webm($path) {
+    $fh = @fopen($path, 'rb');
+    if (!$fh) return false;
+    $h = fread($fh, 4);
+    fclose($fh);
+    return $h === "\x1a\x45\xdf\xa3";
+}
+
+function timadey_ffmpeg_cmd($ffmpeg, $args) {
+    $ff = str_replace('\\', '/', $ffmpeg);
+    exec(escapeshellarg($ff) . ' ' . $args . ' 2>&1', $out, $ret);
+    return $ret === 0;
+}
+
+// Merge chunks into a single seekable WebM
+function timadey_merge($ffmpeg, $chunk_paths, $output) {
+    if (count($chunk_paths) === 1) {
+        copy($chunk_paths[0], $output);
+    } elseif (count($chunk_paths) > 1 && timadey_is_webm($chunk_paths[1])) {
+        // New-style: every chunk is standalone WebM → FFmpeg concat
+        $listfile = $output . '.txt';
+        $lines = [];
+        foreach ($chunk_paths as $p) {
+            $p = str_replace('\\', '/', $p);
+            $lines[] = "file '" . str_replace("'", "'\\''", $p) . "'";
+        }
+        file_put_contents($listfile, implode("\n", $lines) . "\n");
+        $ok = timadey_ffmpeg_cmd($ffmpeg,
+            '-y -f concat -safe 0'
+            . ' -i ' . escapeshellarg(str_replace('\\', '/', $listfile))
+            . ' -c copy -cues_to_front 1 '
+            . escapeshellarg(str_replace('\\', '/', $output))
+        );
+        @unlink($listfile);
+        if (!$ok) return false;
+    } else {
+        // Old-style: chunk 0 has WebM header, rest are raw clusters → raw cat then re-mux
+        $tmp_cat = $output . '.cat.webm';
+        $fh_out  = fopen($tmp_cat, 'wb');
+        foreach ($chunk_paths as $p) {
+            $fh_in = fopen($p, 'rb');
+            if ($fh_in) { stream_copy_to_stream($fh_in, $fh_out); fclose($fh_in); }
+        }
+        fclose($fh_out);
+        // Re-mux through FFmpeg to add cues so seeking works in browser
+        $ok = timadey_ffmpeg_cmd($ffmpeg,
+            '-y -i ' . escapeshellarg(str_replace('\\', '/', $tmp_cat))
+            . ' -c copy -cues_to_front 1 '
+            . escapeshellarg(str_replace('\\', '/', $output))
+        );
+        @unlink($tmp_cat);
+        if (!$ok) return false;
+    }
+    return file_exists($output) && filesize($output) > 0;
+}
+
+// Get video duration in seconds via FFmpeg decode. Result cached in a .dur sidecar file.
+function timadey_get_duration($ffmpeg, $path) {
+    if (!$ffmpeg || !file_exists($path)) return 0;
+    $cache = $path . '.dur';
+    if (file_exists($cache) && filemtime($cache) >= filemtime($path)) {
+        return (int)file_get_contents($cache);
+    }
+    $null = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN' ? 'NUL' : '/dev/null';
+    $ff   = str_replace('\\', '/', $ffmpeg);
+    $cmd  = escapeshellarg($ff)
+          . ' -i ' . escapeshellarg(str_replace('\\', '/', $path))
+          . ' -f null -c copy ' . $null . ' 2>&1';
+    exec($cmd, $out);
+    $dur = 0;
+    foreach (array_reverse($out) as $line) {
+        if (preg_match('/time=(\d+):(\d+):(\d+\.?\d*)/', $line, $m)) {
+            $dur = (int)$m[1] * 3600 + (int)$m[2] * 60 + (int)floor((float)$m[3]);
+            break;
+        }
+    }
+    if ($dur > 0) file_put_contents($cache, $dur);
+    return $dur;
+}
+
+function timadey_fmt($secs) {
+    if ($secs < 0) $secs = 0;
+    $h = floor($secs / 3600);
+    $m = floor(($secs % 3600) / 60);
+    $s = $secs % 60;
+    return $h > 0
+        ? sprintf('%d:%02d:%02d', $h, $m, $s)
+        : sprintf('%d:%02d', $m, $s);
+}
+
+// ── data ─────────────────────────────────────────────────────────────────────
+
+$ffmpeg = timadey_find_ffmpeg();
+
+$sessions = $DB->get_records_sql("
+    SELECT MIN(r.id) AS id, r.userid, r.attemptid,
+           COUNT(r.id)        AS chunk_count,
+           SUM(r.filesize)    AS total_size,
+           MIN(r.timecreated) AS rec_start,
+           MAX(r.timecreated) AS last_chunk_at,
+           u.firstname, u.lastname
+    FROM {local_timadey_recordings} r
+    JOIN {user} u ON u.id = r.userid
+    GROUP BY r.userid, r.attemptid, u.firstname, u.lastname
+    ORDER BY rec_start DESC
+");
+
+// ── output ───────────────────────────────────────────────────────────────────
+
+echo $OUTPUT->header();
+echo '<script>document.addEventListener("DOMContentLoaded",function(){
+    var e=document.querySelector(".page-header-headings");if(e)e.remove();
+});</script>';
+echo $OUTPUT->heading('Proctoring Recordings');
+
+echo '<style>
+.tr-session{border:1px solid #dee2e6;border-radius:8px;margin-bottom:24px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.tr-header{background:#1a1d23;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.tr-header strong{font-size:15px}
+.tr-badge{background:rgba(255,255,255,.12);border-radius:12px;padding:2px 10px;font-size:12px}
+.tr-body{display:flex;background:#111;gap:0}
+.tr-video-side{flex:0 0 65%;min-width:0;background:#000}
+.tr-video-side video{display:block;width:100%;max-height:480px;object-fit:contain}
+.tr-log-side{flex:0 0 35%;background:#1a1d23;overflow-y:scroll;border-left:1px solid #2d3139;height:480px}
+.tr-log-header{padding:10px 14px;font-size:12px;font-weight:700;color:#adb5bd;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #2d3139;position:sticky;top:0;background:#1a1d23;z-index:1}
+.tr-log-item{display:flex;align-items:flex-start;gap:8px;padding:7px 12px 7px 10px;border-bottom:1px solid #23272f;cursor:pointer;transition:background .12s;border-left:3px solid #2d3139}
+.tr-log-item:hover{background:rgba(255,255,255,.04)}
+.tr-log-item.active{background:rgba(52,152,219,.15) !important;border-left-color:#3498db !important}
+.tr-log-time{flex-shrink:0;font-size:11px;font-weight:700;color:#3498db;min-width:36px;font-family:monospace;padding-top:1px}
+.tr-log-sev{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;color:#fff;white-space:nowrap}
+.tr-log-msg{font-size:12px;color:#cdd3db;line-height:1.35;word-break:break-all}
+.tr-actions{background:#111;padding:8px 12px;display:flex;gap:8px;border-top:1px solid #2d3139}
+.tr-actions a{font-size:12px}
+.tr-notice{padding:16px;font-size:13px;color:#adb5bd}
+.tr-no-video{display:flex;align-items:center;justify-content:center;height:480px;color:#6c757d;font-size:13px}
+</style>';
+
+if (empty($sessions)) {
+    echo $OUTPUT->notification('No recordings yet.', 'info');
+    echo $OUTPUT->footer();
+    exit;
+}
+
+$sev_map = [
+    1 => ['Info',     '#6c757d'],
+    3 => ['Low',      '#17a2b8'],
+    5 => ['Medium',   '#ffc107'],
+    7 => ['High',     '#fd7e14'],
+    9 => ['Critical', '#dc3545'],
+];
+function timadey_sev_info($sev, $map) {
+    $r = ['Info', '#6c757d'];
+    foreach ($map as $k => $v) { if ($sev >= $k) $r = $v; }
+    return $r;
+}
+
+
+foreach ($sessions as $s) {
+    $chunks = $DB->get_records('local_timadey_recordings',
+        ['userid' => $s->userid, 'attemptid' => $s->attemptid], 'chunkindex ASC');
+
+    $incidents = $DB->get_records_sql("
+        SELECT id, message, severity, timecreated
+        FROM {local_timadey_incidents}
+        WHERE userid = :uid AND attemptid = :aid
+        ORDER BY timecreated ASC
+    ", ['uid' => $s->userid, 'aid' => $s->attemptid]);
+
+    $total_mb  = round($s->total_size / 1024 / 1024, 1);
+    $name      = htmlspecialchars($s->firstname . ' ' . $s->lastname);
+    $vid_id    = 'vid_' . (int)$s->attemptid;
+
+    // ── build / merge the video FIRST so we can get its duration ─────────────
+
+    $chunk_paths = [];
+    foreach ($chunks as $chunk) {
+        $pub = $chunk->userid . '_' . $chunk->attemptid . '_' . $chunk->chunkindex . '.webm';
+        $pub_path = $tmp_dir . DIRECTORY_SEPARATOR . $pub;
+        if (!file_exists($pub_path)) {
+            $src = $CFG->dataroot . DIRECTORY_SEPARATOR
+                 . str_replace('/', DIRECTORY_SEPARATOR, $chunk->filepath);
+            if (file_exists($src)) @copy($src, $pub_path);
+        }
+        if (file_exists($pub_path)) $chunk_paths[] = $pub_path;
+    }
+
+    $merged_name = $s->userid . '_' . $s->attemptid . '_merged.webm';
+    $merged_path = $tmp_dir . DIRECTORY_SEPARATOR . $merged_name;
+    $merged_url  = $tmp_web . '/' . $merged_name;
+    $need_merge  = !file_exists($merged_path) || filemtime($merged_path) < $s->last_chunk_at;
+
+    $video_ok = false;
+    if (count($chunk_paths) === 0) {
+        // no files — will show placeholder later
+    } elseif ($need_merge) {
+        if ($ffmpeg) {
+            $video_ok = timadey_merge($ffmpeg, $chunk_paths, $merged_path);
+        }
+        if (!$video_ok && file_exists($chunk_paths[0])) {
+            $merged_name = basename($chunk_paths[0]);
+            $merged_path = $tmp_dir . DIRECTORY_SEPARATOR . $merged_name;
+            $merged_url  = $tmp_web . '/' . $merged_name;
+            $video_ok    = true;
+        }
+    } else {
+        $video_ok = true;
+    }
+
+    // ── compute duration & the true session-start timestamp ──────────────────
+    // The video duration tells us how long the recording actually is.
+    // The first incident timestamp is the true session start (proctoring fires
+    // events immediately, whereas recording chunks are uploaded with a delay).
+    // video_start = the wall-clock second at which the video begins.
+
+    $duration = $video_ok ? timadey_get_duration($ffmpeg, $merged_path) : 0;
+
+    // Determine session start: earliest incident, or fall back to rec_start
+    $first_incident_ts = 0;
+    if (!empty($incidents)) {
+        $first_inc = reset($incidents);
+        $first_incident_ts = (int)$first_inc->timecreated;
+    }
+
+    // video_start = the wall-clock time the video started recording.
+    // Best estimate: the first incident timestamp (proctoring & recording start together).
+    // If no incidents, fall back to rec_start (= first chunk upload time).
+    if ($first_incident_ts > 0) {
+        $video_start = $first_incident_ts;
+    } else {
+        $video_start = (int)$s->rec_start;
+    }
+
+    $date = date('d M Y, H:i', $video_start);
+
+    // ── render header ────────────────────────────────────────────────────────
+
+    echo '<div class="tr-session">
+        <div class="tr-header">
+            <div>
+                <strong>' . $name . '</strong>
+                &nbsp;&nbsp;Attempt #' . (int)$s->attemptid . '
+                &nbsp;&nbsp;<span style="opacity:.55">' . $date . '</span>
+            </div>
+            <span class="tr-badge">' . count($chunks) . ' clip(s) &middot; ' . $total_mb . ' MB'
+                . ($duration > 0 ? ' &middot; ' . timadey_fmt($duration) : '') . '</span>
+        </div>
+        <div class="tr-body">';
+
+    // ── video side ────────────────────────────────────────────────────────────
+
+    if (count($chunk_paths) === 0) {
+        echo '<div class="tr-video-side"><div class="tr-no-video">Recording files deleted (24h retention)</div></div>';
+    } elseif ($video_ok) {
+        echo '<div class="tr-video-side">
+            <video id="' . $vid_id . '" controls preload="auto" style="width:100%;max-height:480px;background:#000;display:block">
+                <source src="' . $merged_url . '" type="video/webm">
+            </video>
+          </div>';
+    } else {
+        echo '<div class="tr-video-side"><div class="tr-no-video">Merge failed — FFmpeg not available</div></div>';
+    }
+
+    // ── log side ──────────────────────────────────────────────────────────────
+
+    echo '<div class="tr-log-side" id="log_' . (int)$s->attemptid . '">';
+    echo '<div class="tr-log-header">Events (' . count($incidents) . ')</div>';
+
+    if (empty($incidents)) {
+        echo '<div class="tr-notice">No incidents recorded for this session.</div>';
+    } else {
+        foreach ($incidents as $inc) {
+            // Offset = seconds into the video when this incident happened
+            $raw    = (int)$inc->timecreated - $video_start;
+            $offset = max(0, $raw);
+            if ($duration > 0) {
+                $offset = min($offset, $duration);
+            }
+            $ts      = timadey_fmt($offset);
+            $sevinfo = timadey_sev_info((int)$inc->severity, $sev_map);
+            $msg     = htmlspecialchars($inc->message);
+            echo '<div class="tr-log-item" data-t="' . $offset . '" data-vid="' . $vid_id . '"
+                      onclick="tdSeek(this)">'
+                . '<span class="tr-log-time">' . $ts . '</span>'
+                . '<span class="tr-log-sev" style="background:' . $sevinfo[1] . '">' . $sevinfo[0] . '</span>'
+                . '<span class="tr-log-msg">' . $msg . '</span>'
+              . '</div>';
+        }
+    }
+    echo '</div>'; // .tr-log-side
+
+    echo '</div>'; // .tr-body
+
+    // ── actions ───────────────────────────────────────────────────────────────
+    if ($video_ok) {
+        echo '<div class="tr-actions">
+            <a href="' . $merged_url . '" target="_blank" class="btn btn-sm btn-outline-light">&#9654; Open</a>
+            <a href="' . $merged_url . '" download="' . $merged_name . '" class="btn btn-sm btn-outline-light">&#11015; Download</a>
+          </div>';
+    }
+
+    echo '</div>'; // .tr-session
+}
+
+// ── JavaScript ────────────────────────────────────────────────────────────────
+?>
+<script>
+function tdSeek(item) {
+    var vid = document.getElementById(item.dataset.vid);
+    if (!vid) return;
+    var t = parseFloat(item.dataset.t);
+    vid.currentTime = t;
+    vid.play();
+}
+
+// Highlight log entry matching current video time, auto-scroll unless user is scrolling
+(function() {
+    var lastTick = {}, userScrolling = {}, scrollTimer = {};
+
+    document.querySelectorAll('video[id^="vid_"]').forEach(function(vid) {
+        var logId = 'log_' + vid.id.replace('vid_', '');
+        var log   = document.getElementById(logId);
+        if (!log) return;
+
+        // Track manual scrolling — pause auto-scroll for 2.5 s after user touches scroll
+        log.addEventListener('scroll', function() {
+            userScrolling[logId] = true;
+            clearTimeout(scrollTimer[logId]);
+            scrollTimer[logId] = setTimeout(function() { userScrolling[logId] = false; }, 2500);
+        }, {passive: true});
+
+        vid.addEventListener('timeupdate', function() {
+            // Throttle to once per second
+            var now = Math.floor(vid.currentTime);
+            if (lastTick[vid.id] === now) return;
+            lastTick[vid.id] = now;
+
+            var items = log.querySelectorAll('.tr-log-item');
+            var best = null, bestDiff = Infinity;
+            items.forEach(function(el) {
+                var diff = now - parseInt(el.dataset.t, 10);
+                if (diff >= 0 && diff < bestDiff) { bestDiff = diff; best = el; }
+            });
+            items.forEach(function(el) { el.classList.remove('active'); });
+            if (!best) return;
+            best.classList.add('active');
+
+            if (!userScrolling[logId]) {
+                var logRect  = log.getBoundingClientRect();
+                var itemRect = best.getBoundingClientRect();
+                if (itemRect.top < logRect.top || itemRect.bottom > logRect.bottom) {
+                    best.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+                }
+            }
+        });
+    });
+}());
+
+</script>
+<?php
+echo $OUTPUT->footer();

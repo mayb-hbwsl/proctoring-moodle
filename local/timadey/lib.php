@@ -35,11 +35,22 @@ function local_timadey_inject_assets() {
     // We look for 'attempt.php' anywhere in the URL (works for standard and adaptive quiz)
     if (strpos($url, 'attempt.php') !== false) {
         
-        // Inject CSS
-        $PAGE->requires->css(new moodle_url('/local/timadey/assets/moodle-proctor-bundle.css'));
-        
-        // Inject JS (the 'true' makes it load in the footer for better performance)
-        $PAGE->requires->js(new moodle_url('/local/timadey/assets/moodle-proctor-bundle.iife.js'), true);
+        $css_url = new moodle_url('/local/timadey/assets/moodle-proctor-bundle.css');
+        $js_url = new moodle_url('/local/timadey/assets/moodle-proctor-bundle.iife.js');
+        $recorder_url = new moodle_url('/local/timadey/assets/recorder.js');
+
+        if ($PAGE->state < moodle_page::STATE_PRINTING_HEADER) {
+            // Inject CSS and JS cleanly into head/footer via Moodle API
+            $PAGE->requires->css($css_url);
+            // Inject JS (false means don't put in head, so it goes to footer)
+            $PAGE->requires->js($js_url, false);
+            $PAGE->requires->js($recorder_url, false);
+        } else {
+            // Fallback for late injection (e.g. during before_footer hook)
+            echo '<link rel="stylesheet" type="text/css" href="' . $css_url . '">';
+            echo '<script src="' . $js_url . '"></script>';
+            echo '<script src="' . $recorder_url . '"></script>';
+        }
         
         $already_injected = true;
     }

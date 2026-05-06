@@ -36,10 +36,20 @@ global $DB, $USER;
 
 // Build the incident record
 $record = new stdClass();
+$severity_map = [
+    'info'     => 1,
+    'low'      => 3,
+    'medium'   => 5,
+    'high'     => 7,
+    'critical' => 9,
+];
+$sev_raw = strtolower(trim($data['severity'] ?? ''));
+$sev_int = isset($severity_map[$sev_raw]) ? $severity_map[$sev_raw] : intval($data['severity'] ?? 1);
+
 $record->userid = $USER->id;
 $record->attemptid = intval($data['attemptid'] ?? 0);
 $record->message = clean_param($data['message'], PARAM_TEXT);
-$record->severity = intval($data['severity'] ?? 0);
+$record->severity = $sev_int;
 $record->eventtime = intval($data['timestamp'] ?? time() * 1000);
 $record->timecreated = time();
 

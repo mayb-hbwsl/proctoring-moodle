@@ -20,5 +20,23 @@
         <INDEX NAME="idx_severity" UNIQUE="false" FIELDS="severity"/>
       </INDEXES>
     </TABLE>
+    <TABLE NAME="local_timadey_recordings" COMMENT="Tracks webcam video recording chunks per quiz attempt">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Moodle user ID"/>
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Quiz attempt ID"/>
+        <FIELD NAME="chunkindex" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Sequential chunk number (0-based)"/>
+        <FIELD NAME="filepath" TYPE="text" NOTNULL="true" COMMENT="Relative path inside moodledata"/>
+        <FIELD NAME="filesize" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Chunk size in bytes"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Unix timestamp when chunk was received"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_userid" UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="idx_attemptid" UNIQUE="false" FIELDS="attemptid"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>
