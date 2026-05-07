@@ -36,6 +36,7 @@
       <INDEXES>
         <INDEX NAME="idx_userid" UNIQUE="false" FIELDS="userid"/>
         <INDEX NAME="idx_attemptid" UNIQUE="false" FIELDS="attemptid"/>
+        <INDEX NAME="uniq_user_attempt_chunk" UNIQUE="true" FIELDS="userid, attemptid, chunkindex"/>
       </INDEXES>
     </TABLE>
   </TABLES>

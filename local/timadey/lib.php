@@ -32,8 +32,11 @@ function local_timadey_inject_assets() {
     // Check the URL directly from the server to be 100% sure
     $url = $_SERVER['REQUEST_URI'] ?? '';
     
-    // We look for 'attempt.php' anywhere in the URL (works for standard and adaptive quiz)
-    if (strpos($url, 'attempt.php') !== false) {
+    // Activate on quiz attempt pages AND the summary/review page shown after "Finish attempt".
+    // The summary page is included so recording continues right up until final submission.
+    $on_attempt = strpos($url, 'attempt.php') !== false;
+    $on_summary = strpos($url, '/mod/quiz/summary.php') !== false;
+    if ($on_attempt || $on_summary) {
         
         $css_url = new moodle_url('/local/timadey/assets/moodle-proctor-bundle.css');
         $js_url = new moodle_url('/local/timadey/assets/moodle-proctor-bundle.iife.js');

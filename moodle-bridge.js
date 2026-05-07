@@ -222,7 +222,6 @@ class MoodleProctorBridge {
                 <div class="spinner"></div>
                 <h2>Securing Exam Environment...</h2>
                 <p>Initializing AI Proctoring and verifying system integrity.</p>
-                <p class="small">This system was developed by a crazy intern! So please have patience....</p>
                 <div id="loading-status-subtext">Waiting for system...</div>
                 
             </div>

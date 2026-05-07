@@ -106,7 +106,11 @@ function timadey_get_duration($ffmpeg, $path) {
     if (!$ffmpeg || !file_exists($path)) return 0;
     $cache = $path . '.dur';
     if (file_exists($cache) && filemtime($cache) >= filemtime($path)) {
-        return (int)file_get_contents($cache);
+        $cached = (int)file_get_contents($cache);
+        // Discard obviously-wrong cached values (0 or 1 second for a real recording file).
+        // filesize > 50KB but duration <= 1s means FFmpeg failed previously — re-probe.
+        if ($cached > 1 || filesize($path) < 51200) return $cached;
+        @unlink($cache);
     }
     $null = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN' ? 'NUL' : '/dev/null';
     $ff   = str_replace('\\', '/', $ffmpeg);
@@ -135,22 +139,152 @@ function timadey_fmt($secs) {
         : sprintf('%d:%02d', $m, $s);
 }
 
+// ── filters ───────────────────────────────────────────────────────────────────
+
+$filter_course  = optional_param('courseid',  0, PARAM_INT);
+$filter_quiz    = optional_param('quizid',    0, PARAM_INT);
+$filter_student = optional_param('userid',    0, PARAM_INT);
+$filter_attempt = optional_param('attemptid', 0, PARAM_INT);
+$any_filter     = $filter_course || $filter_quiz || $filter_student || $filter_attempt;
+
 // ── data ─────────────────────────────────────────────────────────────────────
 
 $ffmpeg = timadey_find_ffmpeg();
 
-$sessions = $DB->get_records_sql("
+// Build WHERE for the main sessions query.
+$where  = [];
+$params = [];
+if ($filter_attempt) { $where[] = 'r.attemptid = :aid'; $params['aid'] = $filter_attempt; }
+if ($filter_student) { $where[] = 'r.userid = :uid';    $params['uid'] = $filter_student; }
+if ($filter_quiz)    { $where[] = 'qa.quiz = :qid';     $params['qid'] = $filter_quiz; }
+if ($filter_course)  { $where[] = 'c.id = :cid';        $params['cid'] = $filter_course; }
+$where_sql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+$db_sessions = $DB->get_records_sql("
     SELECT MIN(r.id) AS id, r.userid, r.attemptid,
            COUNT(r.id)        AS chunk_count,
            SUM(r.filesize)    AS total_size,
            MIN(r.timecreated) AS rec_start,
            MAX(r.timecreated) AS last_chunk_at,
-           u.firstname, u.lastname
+           u.firstname, u.lastname,
+           q.id   AS quizid,   q.name   AS quizname,
+           c.id   AS courseid, c.fullname AS coursename
     FROM {local_timadey_recordings} r
     JOIN {user} u ON u.id = r.userid
-    GROUP BY r.userid, r.attemptid, u.firstname, u.lastname
+    LEFT JOIN {quiz_attempts} qa ON qa.id = r.attemptid
+    LEFT JOIN {quiz}          q  ON q.id  = qa.quiz
+    LEFT JOIN {course}        c  ON c.id  = q.course
+    $where_sql
+    GROUP BY r.userid, r.attemptid, u.firstname, u.lastname,
+             q.id, q.name, c.id, c.fullname
     ORDER BY rec_start DESC
+", $params);
+
+// Build lookup set of DB-covered (userid, attemptid) pairs.
+$db_keys = [];
+foreach ($db_sessions as $s) {
+    $db_keys[$s->userid . '_' . $s->attemptid] = true;
+}
+
+// Scan filesystem for recordings with no DB record.
+// Skip filesystem scan when course/quiz filter is active (no metadata available).
+$fs_extra = [];
+if (!$filter_course && !$filter_quiz) {
+    $rec_root = $CFG->dataroot . DIRECTORY_SEPARATOR . 'timadey_recordings';
+    if (is_dir($rec_root)) {
+        foreach (glob($rec_root . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $udir) {
+            $uid = (int)basename($udir);
+            if ($uid <= 0) continue;
+            if ($filter_student && $uid !== $filter_student) continue;
+            foreach (glob($udir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $adir) {
+                $aid = (int)basename($adir);
+                if ($filter_attempt && $aid !== $filter_attempt) continue;
+                $key = $uid . '_' . $aid;
+                if (isset($db_keys[$key])) continue;
+                $chunks = glob($adir . DIRECTORY_SEPARATOR . 'chunk_*.webm');
+                if (empty($chunks)) continue;
+                $mtimes   = array_map('filemtime', $chunks);
+                $fsizes   = array_map('filesize',  $chunks);
+                $user_obj = $DB->get_record('user', ['id' => $uid], 'id, firstname, lastname');
+                $s               = new stdClass();
+                $s->id           = 0;
+                $s->userid       = $uid;
+                $s->attemptid    = $aid;
+                $s->chunk_count  = count($chunks);
+                $s->total_size   = array_sum($fsizes);
+                $s->rec_start    = min($mtimes);
+                $s->last_chunk_at = max($mtimes);
+                $s->firstname    = $user_obj ? $user_obj->firstname : 'User';
+                $s->lastname     = $user_obj ? $user_obj->lastname  : $uid;
+                $s->quizid       = null;
+                $s->quizname     = null;
+                $s->courseid     = null;
+                $s->coursename   = null;
+                $fs_extra[$key]  = $s;
+            }
+        }
+    }
+}
+
+$sessions = array_values($db_sessions);
+foreach ($fs_extra as $s) { $sessions[] = $s; }
+usort($sessions, function($a, $b) { return $b->rec_start - $a->rec_start; });
+
+// ── dropdown data ─────────────────────────────────────────────────────────────
+
+$course_list = $DB->get_records_sql("
+    SELECT DISTINCT c.id, c.fullname
+    FROM {local_timadey_recordings} r
+    LEFT JOIN {quiz_attempts} qa ON qa.id = r.attemptid
+    LEFT JOIN {quiz}          q  ON q.id  = qa.quiz
+    LEFT JOIN {course}        c  ON c.id  = q.course
+    WHERE c.id IS NOT NULL
+    ORDER BY c.fullname ASC
 ");
+
+$quiz_params = [];
+$quiz_where  = 'WHERE q.id IS NOT NULL';
+if ($filter_course) { $quiz_where = 'WHERE c.id = :cid'; $quiz_params['cid'] = $filter_course; }
+$quiz_list = $DB->get_records_sql("
+    SELECT DISTINCT q.id, q.name, c.fullname AS coursename
+    FROM {local_timadey_recordings} r
+    LEFT JOIN {quiz_attempts} qa ON qa.id = r.attemptid
+    LEFT JOIN {quiz}          q  ON q.id  = qa.quiz
+    LEFT JOIN {course}        c  ON c.id  = q.course
+    $quiz_where
+    ORDER BY q.name ASC
+", $quiz_params);
+
+$student_wheres = []; $student_params = [];
+if ($filter_course) { $student_wheres[] = 'c.id = :cid';    $student_params['cid'] = $filter_course; }
+if ($filter_quiz)   { $student_wheres[] = 'qa.quiz = :qid'; $student_params['qid'] = $filter_quiz; }
+$student_where = $student_wheres ? 'WHERE ' . implode(' AND ', $student_wheres) : '';
+$student_list = $DB->get_records_sql("
+    SELECT DISTINCT u.id, u.firstname, u.lastname
+    FROM {local_timadey_recordings} r
+    JOIN {user} u ON u.id = r.userid
+    LEFT JOIN {quiz_attempts} qa ON qa.id = r.attemptid
+    LEFT JOIN {quiz}          q  ON q.id  = qa.quiz
+    LEFT JOIN {course}        c  ON c.id  = q.course
+    $student_where
+    ORDER BY u.lastname ASC, u.firstname ASC
+", $student_params);
+
+$att_wheres = []; $att_params = [];
+if ($filter_course)  { $att_wheres[] = 'c.id = :cid';    $att_params['cid'] = $filter_course; }
+if ($filter_quiz)    { $att_wheres[] = 'qa.quiz = :qid';  $att_params['qid'] = $filter_quiz; }
+if ($filter_student) { $att_wheres[] = 'r.userid = :uid'; $att_params['uid'] = $filter_student; }
+$att_where = $att_wheres ? 'WHERE ' . implode(' AND ', $att_wheres) : '';
+$attempt_list = $DB->get_records_sql("
+    SELECT DISTINCT r.attemptid, u.firstname, u.lastname, q.name AS quizname
+    FROM {local_timadey_recordings} r
+    JOIN {user} u ON u.id = r.userid
+    LEFT JOIN {quiz_attempts} qa ON qa.id = r.attemptid
+    LEFT JOIN {quiz}          q  ON q.id  = qa.quiz
+    LEFT JOIN {course}        c  ON c.id  = q.course
+    $att_where
+    ORDER BY r.attemptid DESC
+", $att_params);
 
 // ── output ───────────────────────────────────────────────────────────────────
 
@@ -161,9 +295,17 @@ echo '<script>document.addEventListener("DOMContentLoaded",function(){
 echo $OUTPUT->heading('Proctoring Recordings');
 
 echo '<style>
+.tr-wrap{max-width:1200px}
+.tr-filter-box{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px 18px;margin-bottom:22px}
+.tr-filter-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.tr-filter-group{display:flex;flex-direction:column;gap:4px}
+.tr-filter-group label{font-size:11px;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.04em}
+.tr-filter-group select{min-width:180px}
+.tr-filter-actions{display:flex;gap:8px;align-items:flex-end;padding-bottom:1px}
 .tr-session{border:1px solid #dee2e6;border-radius:8px;margin-bottom:24px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .tr-header{background:#1a1d23;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
 .tr-header strong{font-size:15px}
+.tr-meta{font-size:11px;opacity:.6;margin-top:2px}
 .tr-badge{background:rgba(255,255,255,.12);border-radius:12px;padding:2px 10px;font-size:12px}
 .tr-body{display:flex;background:#111;gap:0}
 .tr-video-side{flex:0 0 65%;min-width:0;background:#000}
@@ -182,8 +324,77 @@ echo '<style>
 .tr-no-video{display:flex;align-items:center;justify-content:center;height:480px;color:#6c757d;font-size:13px}
 </style>';
 
+echo '<div class="tr-wrap">';
+
+// ── filter bar ────────────────────────────────────────────────────────────────
+echo '<div class="tr-filter-box">
+  <form method="get">
+    <div class="tr-filter-row">';
+
+// Course
+echo '<div class="tr-filter-group">
+  <label>Course</label>
+  <select name="courseid" class="form-control form-control-sm">';
+echo '<option value="0">All courses</option>';
+foreach ($course_list as $c) {
+    $sel = $filter_course == $c->id ? ' selected' : '';
+    echo '<option value="' . $c->id . '"' . $sel . '>' . htmlspecialchars($c->fullname) . '</option>';
+}
+echo '</select></div>';
+
+// Quiz
+echo '<div class="tr-filter-group">
+  <label>Quiz</label>
+  <select name="quizid" class="form-control form-control-sm">';
+echo '<option value="0">All quizzes</option>';
+foreach ($quiz_list as $q) {
+    $sel   = $filter_quiz == $q->id ? ' selected' : '';
+    $label = htmlspecialchars($q->name);
+    if (!$filter_course && !empty($q->coursename)) {
+        $label .= ' (' . htmlspecialchars($q->coursename) . ')';
+    }
+    echo '<option value="' . $q->id . '"' . $sel . '>' . $label . '</option>';
+}
+echo '</select></div>';
+
+// Student
+echo '<div class="tr-filter-group">
+  <label>Student</label>
+  <select name="userid" class="form-control form-control-sm">';
+echo '<option value="0">All students</option>';
+foreach ($student_list as $u) {
+    $sel = $filter_student == $u->id ? ' selected' : '';
+    echo '<option value="' . $u->id . '"' . $sel . '>'
+        . htmlspecialchars($u->firstname . ' ' . $u->lastname) . '</option>';
+}
+echo '</select></div>';
+
+// Attempt
+echo '<div class="tr-filter-group">
+  <label>Attempt</label>
+  <select name="attemptid" class="form-control form-control-sm">';
+echo '<option value="0">All attempts</option>';
+foreach ($attempt_list as $a) {
+    $sel   = $filter_attempt == $a->attemptid ? ' selected' : '';
+    $label = 'Attempt #' . $a->attemptid . ' — ' . htmlspecialchars($a->firstname . ' ' . $a->lastname);
+    if (!empty($a->quizname)) $label .= ' · ' . htmlspecialchars($a->quizname);
+    echo '<option value="' . $a->attemptid . '"' . $sel . '>' . $label . '</option>';
+}
+echo '</select></div>';
+
+// Buttons
+echo '<div class="tr-filter-actions">
+  <button type="submit" class="btn btn-sm btn-primary">Apply</button>';
+if ($any_filter) {
+    echo '<a href="recordings.php" class="btn btn-sm btn-outline-secondary">Clear</a>';
+}
+echo '</div>';
+
+echo '</div></form></div>'; // .tr-filter-row, form, .tr-filter-box
+
 if (empty($sessions)) {
-    echo $OUTPUT->notification('No recordings yet.', 'info');
+    echo $OUTPUT->notification('No recordings found for the selected filters.', 'info');
+    echo '</div>';
     echo $OUTPUT->footer();
     exit;
 }
@@ -203,8 +414,43 @@ function timadey_sev_info($sev, $map) {
 
 
 foreach ($sessions as $s) {
-    $chunks = $DB->get_records('local_timadey_recordings',
-        ['userid' => $s->userid, 'attemptid' => $s->attemptid], 'chunkindex ASC');
+    $all_chunk_rows = $DB->get_records('local_timadey_recordings',
+        ['userid' => $s->userid, 'attemptid' => $s->attemptid], 'chunkindex ASC, id DESC');
+
+    // Deduplicate by chunkindex — keep only the record with the largest filesize per index
+    // (guards against duplicate inserts that would cause FFmpeg to double-concat a chunk).
+    $seen_idx = [];
+    $chunks   = [];
+    foreach ($all_chunk_rows as $row) {
+        $idx = (int)$row->chunkindex;
+        if (!isset($seen_idx[$idx]) || $row->filesize > $seen_idx[$idx]->filesize) {
+            $seen_idx[$idx] = $row;
+        }
+    }
+    ksort($seen_idx);
+    $chunks = array_values($seen_idx);
+
+    // For filesystem-only sessions (no DB records), synthesise chunk objects from disk.
+    if (empty($chunks)) {
+        $adir = $CFG->dataroot . DIRECTORY_SEPARATOR . 'timadey_recordings'
+              . DIRECTORY_SEPARATOR . $s->userid . DIRECTORY_SEPARATOR . $s->attemptid;
+        $disk_files = glob($adir . DIRECTORY_SEPARATOR . 'chunk_*.webm');
+        if ($disk_files) {
+            natsort($disk_files);
+            foreach ($disk_files as $df) {
+                if (preg_match('/chunk_(\d{4})\.webm$/', basename($df), $m)) {
+                    $c              = new stdClass();
+                    $c->userid      = $s->userid;
+                    $c->attemptid   = $s->attemptid;
+                    $c->chunkindex  = (int)$m[1];
+                    $rel            = 'timadey_recordings/' . $s->userid . '/' . $s->attemptid . '/' . basename($df);
+                    $c->filepath    = $rel;
+                    $c->filesize    = filesize($df);
+                    $chunks[]       = $c;
+                }
+            }
+        }
+    }
 
     $incidents = $DB->get_records_sql("
         SELECT id, message, severity, eventtime, timecreated
@@ -280,6 +526,14 @@ foreach ($sessions as $s) {
 
     $date = date('d M Y, H:i', (int)($video_start_ms / 1000));
 
+    // Meta: Course › Quiz breadcrumb
+    $meta_parts = [];
+    if (!empty($s->coursename)) $meta_parts[] = htmlspecialchars($s->coursename);
+    if (!empty($s->quizname))   $meta_parts[] = htmlspecialchars($s->quizname);
+    $meta_html = $meta_parts
+        ? '<div class="tr-meta">' . implode(' &rsaquo; ', $meta_parts) . '</div>'
+        : '';
+
     // ── render header ────────────────────────────────────────────────────────
 
     echo '<div class="tr-session">
@@ -288,6 +542,7 @@ foreach ($sessions as $s) {
                 <strong>' . $name . '</strong>
                 &nbsp;&nbsp;Attempt #' . (int)$s->attemptid . '
                 &nbsp;&nbsp;<span style="opacity:.55">' . $date . '</span>
+                ' . $meta_html . '
             </div>
             <span class="tr-badge">' . count($chunks) . ' clip(s) &middot; ' . $total_mb . ' MB'
                 . ($duration > 0 ? ' &middot; ' . timadey_fmt($duration) : '') . '</span>
@@ -414,4 +669,5 @@ function tdSeek(item) {
 
 </script>
 <?php
+echo '</div>'; // .tr-wrap
 echo $OUTPUT->footer();

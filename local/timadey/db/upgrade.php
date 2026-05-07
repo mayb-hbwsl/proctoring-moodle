@@ -28,5 +28,15 @@ function xmldb_local_timadey_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026050401, 'local', 'timadey');
     }
 
+    if ($oldversion < 2026050601) {
+        // Add unique index on (userid, attemptid, chunkindex) to prevent duplicate inserts.
+        $table = new xmldb_table('local_timadey_recordings');
+        $index = new xmldb_index('uniq_user_attempt_chunk', XMLDB_INDEX_UNIQUE, ['userid', 'attemptid', 'chunkindex']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+        upgrade_plugin_savepoint(true, 2026050601, 'local', 'timadey');
+    }
+
     return true;
 }
