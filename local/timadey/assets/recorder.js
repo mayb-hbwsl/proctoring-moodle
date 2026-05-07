@@ -2,6 +2,7 @@
     'use strict';
 
     var ENDPOINT       = '/local/timadey/save_recording.php';
+    var LOG_ENDPOINT   = '/local/timadey/log_incident.php';
     var CHUNK_DURATION = 300000; // rotate to a new chunk file every 5 minutes
     var TIMESLICE      = 10000;  // flush buffered data to server every 10 s
     var VIDEO_BITRATE  = 200000; // 200 kbps
@@ -11,6 +12,7 @@
     var activeRecorder = null;
     var chunkTimer     = null;
     var isUnloading    = false;
+    var recordingStart = 0; // JS timestamp (ms) when recording actually began
 
     function getSesskey() {
         return (window.M && window.M.cfg && window.M.cfg.sesskey) ? window.M.cfg.sesskey : '';
@@ -37,6 +39,24 @@
                 fetch(ENDPOINT, { method: 'POST', body: form });
             }
         } catch (e) { /* silent — never disrupt the exam */ }
+    }
+
+    // Send a precise recording-start marker so the admin view can sync logs to the video.
+    // Uses the same clock (Date.now()) as incident events — giving frame-accurate offset.
+    function sendRecordingStart(ts, attemptid) {
+        try {
+            fetch(LOG_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message:   '__recording_start__',
+                    severity:  'info',
+                    timestamp: ts,
+                    attemptid: attemptid,
+                    sesskey:   getSesskey()
+                })
+            });
+        } catch (e) { /* silent */ }
     }
 
     function startChunk(stream) {
@@ -86,16 +106,34 @@
         activeStream   = null;
     }
 
+    function beginRecording(video) {
+        recordingStart = Date.now();
+        activeStream   = video.srcObject;
+        startChunk(activeStream);
+        sendRecordingStart(recordingStart, getAttemptId());
+        window.addEventListener('beforeunload', stopRecording);
+    }
+
     function waitForStream() {
         var video = document.getElementById('timadey-webcam');
         if (video && video.srcObject && video.readyState >= 2) {
-            activeStream = video.srcObject;
-            startChunk(activeStream);
-            console.log('[Timadey Recorder] Recording started (60 s flush, 5 min chunks).');
-            window.addEventListener('beforeunload', stopRecording);
-        } else {
-            setTimeout(waitForStream, 1000);
+            beginRecording(video);
+            return;
         }
+
+        // MutationObserver fires instantly when the bundle adds the webcam element —
+        // avoids the old 0-1 second polling delay.
+        var observer = new MutationObserver(function () {
+            var v = document.getElementById('timadey-webcam');
+            if (!v || !v.srcObject) return;
+            observer.disconnect();
+            if (v.readyState >= 2) {
+                beginRecording(v);
+            } else {
+                v.addEventListener('loadeddata', function () { beginRecording(v); }, { once: true });
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
     }
 
     var path = window.location.pathname;

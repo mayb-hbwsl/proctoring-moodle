@@ -48,19 +48,25 @@ function timadey_ffmpeg_cmd($ffmpeg, $args) {
     return $ret === 0;
 }
 
+function timadey_write_filelist($path, array $files) {
+    // Must be written as UTF-8 without BOM — FFmpeg rejects BOM as invalid keyword.
+    $lines = '';
+    foreach ($files as $f) {
+        $lines .= "file '" . str_replace("'", "'\\''", str_replace('\\', '/', $f)) . "'\n";
+    }
+    file_put_contents($path, $lines);
+}
+
 // Merge chunks into a single seekable WebM
 function timadey_merge($ffmpeg, $chunk_paths, $output) {
+    $total_src = array_sum(array_map('filesize', $chunk_paths));
+
     if (count($chunk_paths) === 1) {
         copy($chunk_paths[0], $output);
     } elseif (count($chunk_paths) > 1 && timadey_is_webm($chunk_paths[1])) {
-        // New-style: every chunk is standalone WebM → FFmpeg concat
+        // New-style: every chunk is standalone WebM → FFmpeg concat demuxer
         $listfile = $output . '.txt';
-        $lines = [];
-        foreach ($chunk_paths as $p) {
-            $p = str_replace('\\', '/', $p);
-            $lines[] = "file '" . str_replace("'", "'\\''", $p) . "'";
-        }
-        file_put_contents($listfile, implode("\n", $lines) . "\n");
+        timadey_write_filelist($listfile, $chunk_paths);
         $ok = timadey_ffmpeg_cmd($ffmpeg,
             '-y -f concat -safe 0'
             . ' -i ' . escapeshellarg(str_replace('\\', '/', $listfile))
@@ -69,6 +75,11 @@ function timadey_merge($ffmpeg, $chunk_paths, $output) {
         );
         @unlink($listfile);
         if (!$ok) return false;
+        // Sanity: merged file should not be dramatically larger than source (indicates bad concat)
+        if (file_exists($output) && filesize($output) > $total_src * 1.3) {
+            @unlink($output);
+            return false;
+        }
     } else {
         // Old-style: chunk 0 has WebM header, rest are raw clusters → raw cat then re-mux
         $tmp_cat = $output . '.cat.webm';
@@ -196,7 +207,7 @@ foreach ($sessions as $s) {
         ['userid' => $s->userid, 'attemptid' => $s->attemptid], 'chunkindex ASC');
 
     $incidents = $DB->get_records_sql("
-        SELECT id, message, severity, timecreated
+        SELECT id, message, severity, eventtime, timecreated
         FROM {local_timadey_incidents}
         WHERE userid = :uid AND attemptid = :aid
         ORDER BY timecreated ASC
@@ -223,7 +234,10 @@ foreach ($sessions as $s) {
     $merged_name = $s->userid . '_' . $s->attemptid . '_merged.webm';
     $merged_path = $tmp_dir . DIRECTORY_SEPARATOR . $merged_name;
     $merged_url  = $tmp_web . '/' . $merged_name;
-    $need_merge  = !file_exists($merged_path) || filemtime($merged_path) < $s->last_chunk_at;
+    $total_chunk_size = array_sum(array_map(function($p){ return file_exists($p) ? filesize($p) : 0; }, $chunk_paths));
+    $need_merge  = !file_exists($merged_path)
+        || filemtime($merged_path) < $s->last_chunk_at
+        || (count($chunk_paths) > 1 && file_exists($merged_path) && filesize($merged_path) > $total_chunk_size * 1.3);
 
     $video_ok = false;
     if (count($chunk_paths) === 0) {
@@ -242,31 +256,29 @@ foreach ($sessions as $s) {
         $video_ok = true;
     }
 
-    // ── compute duration & the true session-start timestamp ──────────────────
-    // The video duration tells us how long the recording actually is.
-    // The first incident timestamp is the true session start (proctoring fires
-    // events immediately, whereas recording chunks are uploaded with a delay).
-    // video_start = the wall-clock second at which the video begins.
-
+    // ── compute duration & the true video-start reference ───────────────────
     $duration = $video_ok ? timadey_get_duration($ffmpeg, $merged_path) : 0;
 
-    // Determine session start: earliest incident, or fall back to rec_start
-    $first_incident_ts = 0;
-    if (!empty($incidents)) {
-        $first_inc = reset($incidents);
-        $first_incident_ts = (int)$first_inc->timecreated;
-    }
+    // Prefer the __recording_start__ marker sent by recorder.js the instant
+    // MediaRecorder.start() is called — same JS clock as every eventtime, so
+    // offsets are frame-accurate.  Fall back to rec_start-10s for old recordings.
+    $rec_start_row = $DB->get_record_sql("
+        SELECT eventtime
+        FROM {local_timadey_incidents}
+        WHERE userid = :uid AND attemptid = :aid AND message = '__recording_start__'
+        ORDER BY timecreated ASC
+        LIMIT 1
+    ", ['uid' => $s->userid, 'aid' => $s->attemptid]);
 
-    // video_start = the wall-clock time the video started recording.
-    // Best estimate: the first incident timestamp (proctoring & recording start together).
-    // If no incidents, fall back to rec_start (= first chunk upload time).
-    if ($first_incident_ts > 0) {
-        $video_start = $first_incident_ts;
+    // video_start_ms: JS epoch ms when the camera actually started recording.
+    if ($rec_start_row && $rec_start_row->eventtime > 0) {
+        $video_start_ms = (float)$rec_start_row->eventtime;
     } else {
-        $video_start = (int)$s->rec_start;
+        // Fallback: first chunk was uploaded ~10 s after recording began (TIMESLICE).
+        $video_start_ms = ((float)$s->rec_start - 10.0) * 1000.0;
     }
 
-    $date = date('d M Y, H:i', $video_start);
+    $date = date('d M Y, H:i', (int)($video_start_ms / 1000));
 
     // ── render header ────────────────────────────────────────────────────────
 
@@ -299,15 +311,24 @@ foreach ($sessions as $s) {
     // ── log side ──────────────────────────────────────────────────────────────
 
     echo '<div class="tr-log-side" id="log_' . (int)$s->attemptid . '">';
-    echo '<div class="tr-log-header">Events (' . count($incidents) . ')</div>';
+    // Count displayable events (exclude the internal recording-start marker)
+    $display_count = 0;
+    foreach ($incidents as $inc) {
+        if ($inc->message !== '__recording_start__') $display_count++;
+    }
+    echo '<div class="tr-log-header">Events (' . $display_count . ')</div>';
 
-    if (empty($incidents)) {
+    if ($display_count === 0) {
         echo '<div class="tr-notice">No incidents recorded for this session.</div>';
     } else {
         foreach ($incidents as $inc) {
-            // Offset = seconds into the video when this incident happened
-            $raw    = (int)$inc->timecreated - $video_start;
-            $offset = max(0, $raw);
+            if ($inc->message === '__recording_start__') continue;
+
+            // Use eventtime (JS epoch ms, same clock as the recording) for the offset.
+            // Fall back to timecreated*1000 for incidents from before the eventtime fix.
+            $inc_ms  = ($inc->eventtime > 0) ? (float)$inc->eventtime : (float)$inc->timecreated * 1000.0;
+            $raw_ms  = $inc_ms - $video_start_ms;
+            $offset  = max(0, (int)($raw_ms / 1000));
             if ($duration > 0) {
                 $offset = min($offset, $duration);
             }
