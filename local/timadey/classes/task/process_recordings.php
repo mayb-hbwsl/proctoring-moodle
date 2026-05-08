@@ -31,7 +31,8 @@ class process_recordings extends \core\task\scheduled_task {
 
         // Get all known sessions from DB.
         $sessions = $DB->get_records_sql("
-            SELECT userid, attemptid,
+            SELECT CONCAT(userid, '_', attemptid) AS id,
+                   userid, attemptid,
                    MIN(timecreated) AS started_at,
                    MAX(timecreated) AS last_chunk_at
             FROM {local_timadey_recordings}
@@ -50,27 +51,27 @@ class process_recordings extends \core\task\scheduled_task {
             }
         }
 
-        // Also scan the filesystem for sessions not yet in DB (upload in progress, etc.)
-        if ($ffmpeg) {
-            $rec_root = $CFG->dataroot . DIRECTORY_SEPARATOR . 'timadey_recordings';
-            if (is_dir($rec_root)) {
-                foreach (glob($rec_root . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $udir) {
-                    $uid = (int)basename($udir);
-                    if ($uid <= 0) continue;
-                    foreach (glob($udir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $adir) {
-                        $aid     = (int)basename($adir);
-                        $key     = $uid . '_' . $aid;
-                        $in_db   = isset($sessions[$key]) || $DB->record_exists('local_timadey_recordings',
-                            ['userid' => $uid, 'attemptid' => $aid]);
-                        if ($in_db) continue; // already handled above
-                        $chunks  = glob($adir . DIRECTORY_SEPARATOR . 'chunk_*.webm');
-                        if (empty($chunks)) continue;
-                        $mtime   = max(array_map('filemtime', $chunks));
-                        if ($mtime < $cutoff) {
-                            $this->delete_session($uid, $aid, $tmp_dir);
-                        } else {
-                            $this->merge_session($uid, $aid, $mtime, $ffmpeg, $tmp_dir);
-                        }
+        // Also scan the filesystem for sessions not yet in DB.
+        // Deletion runs regardless of FFmpeg availability — only merging needs FFmpeg.
+        $rec_root = $CFG->dataroot . DIRECTORY_SEPARATOR . 'timadey_recordings';
+        if (is_dir($rec_root)) {
+            foreach (glob($rec_root . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $udir) {
+                $uid = (int)basename($udir);
+                if ($uid <= 0) continue;
+                foreach (glob($udir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $adir) {
+                    $aid   = (int)basename($adir);
+                    $key   = $uid . '_' . $aid;
+                    $in_db = isset($sessions[$key]) || $DB->record_exists('local_timadey_recordings',
+                        ['userid' => $uid, 'attemptid' => $aid]);
+                    if ($in_db) continue; // already handled above
+                    // Match chunk_*.webm (new format) AND any other .webm files (old format).
+                    $chunks = glob($adir . DIRECTORY_SEPARATOR . '*.webm');
+                    if (empty($chunks)) continue;
+                    $mtime = max(array_map('filemtime', $chunks));
+                    if ($mtime < $cutoff) {
+                        $this->delete_session($uid, $aid, $tmp_dir);
+                    } else if ($ffmpeg) {
+                        $this->merge_session($uid, $aid, $mtime, $ffmpeg, $tmp_dir);
                     }
                 }
             }
@@ -165,6 +166,7 @@ class process_recordings extends \core\task\scheduled_task {
         $chunks = $DB->get_records('local_timadey_recordings',
             ['userid' => $userid, 'attemptid' => $attemptid]);
 
+        // Delete video files from disk.
         foreach ($chunks as $chunk) {
             $src = $CFG->dataroot . DIRECTORY_SEPARATOR
                  . str_replace('/', DIRECTORY_SEPARATOR, $chunk->filepath);
@@ -174,16 +176,25 @@ class process_recordings extends \core\task\scheduled_task {
             @unlink($pub);
         }
 
-        // Also clean up merged file and its caches.
+        // Clean up merged file and sidecar files.
         $merged = $tmp_dir . DIRECTORY_SEPARATOR . $userid . '_' . $attemptid . '_merged.webm';
         @unlink($merged);
         @unlink($merged . '.dur');
         @unlink($merged . '.txt');
 
-        // Remove empty moodledata directory.
+        // Remove all remaining files in the session directory (covers old formats like full_session.webm).
         $dir = $CFG->dataroot . DIRECTORY_SEPARATOR . 'timadey_recordings'
              . DIRECTORY_SEPARATOR . $userid . DIRECTORY_SEPARATOR . $attemptid;
-        @rmdir($dir);
+        if (is_dir($dir)) {
+            foreach (glob($dir . DIRECTORY_SEPARATOR . '*') as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+        }
+
+        // Remove DB records so the session disappears from the Recordings page.
+        $DB->delete_records('local_timadey_recordings',
+            ['userid' => $userid, 'attemptid' => $attemptid]);
 
         mtrace("[Timadey] Deleted recordings for u={$userid} a={$attemptid} (>24h old).");
     }
@@ -191,11 +202,15 @@ class process_recordings extends \core\task\scheduled_task {
     // ── ffmpeg ────────────────────────────────────────────────────────────────
 
     private function find_ffmpeg() {
+        $configured = get_config('local_timadey', 'ffmpeg_path');
+        if (!empty($configured) && file_exists($configured)) return $configured;
+
         $candidates = [
-            'C:/Users/msacc/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1-full_build/bin/ffmpeg.exe',
             '/usr/bin/ffmpeg',
             '/usr/local/bin/ffmpeg',
             '/opt/ffmpeg/bin/ffmpeg',
+            'C:/ffmpeg/bin/ffmpeg.exe',
+            'C:/Program Files/ffmpeg/bin/ffmpeg.exe',
         ];
         foreach ($candidates as $p) {
             if (file_exists($p)) return $p;

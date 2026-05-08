@@ -7,22 +7,20 @@
     var TIMESLICE      = 3000;   // flush buffered data every 3 s (reduces max data loss at page turn)
     var VIDEO_BITRATE  = 200000; // 200 kbps
 
-    var chunkIndex      = 0;
-    var activeStream    = null;
-    var activeRecorder  = null;
-    var chunkTimer      = null;
-    var isUnloading     = false;
-    var recordingStart  = 0;
-    var recordingStarted = false; // guard against double-start
+    var chunkIndex       = 0;
+    var activeStream     = null;
+    var activeRecorder   = null;
+    var chunkTimer       = null;
+    var isUnloading      = false;
+    var recordingStart   = 0;
+    var recordingStarted = false;
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
     function getSesskey() {
         return (window.M && window.M.cfg && window.M.cfg.sesskey) ? window.M.cfg.sesskey : '';
     }
 
-    // Read attempt ID from URL.  Cache it in localStorage so summary.php inherits
-    // the correct value even when the URL lacks the ?attempt= parameter.
     function getAttemptId() {
         var fromUrl = parseInt(new URLSearchParams(window.location.search).get('attempt')) || 0;
         if (fromUrl > 0) {
@@ -32,19 +30,44 @@
         try { return parseInt(localStorage.getItem('timadey_attemptid') || '0') || 0; } catch (e) { return 0; }
     }
 
-    // Persist the current chunkIndex so the next page load can continue from here
-    // without a network round-trip.
     function saveChunkState() {
         try { localStorage.setItem('timadey_chunkindex', String(chunkIndex)); } catch (e) {}
     }
 
-    // Return the next chunk index to use, based on what localStorage last saved.
-    // Minimum value is enforced for the caller (e.g. summary page always starts >= 1).
     function getNextChunkFromCache(minimum) {
         var cached = 0;
         try { cached = parseInt(localStorage.getItem('timadey_chunkindex') || '-1'); } catch (e) {}
         var next = cached >= 0 ? cached + 1 : 0;
         return Math.max(next, minimum || 0);
+    }
+
+    // ── loading screen ────────────────────────────────────────────────────────
+
+    // Dismiss the MediaPipe loading overlay as soon as the camera is ready.
+    // MediaPipe continues loading in the background for detection; the student
+    // does not need to wait for it to see the quiz.
+    function dismissLoadingOverlay() {
+        var found = false;
+        var polls = 0;
+
+        function tryDismiss() {
+            var overlay = document.getElementById('timadey-loading-overlay');
+            if (overlay && !found) {
+                found = true;
+                overlay.classList.add('fade-out');
+                setTimeout(function () {
+                    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                    document.body.classList.remove('timadey-locked');
+                }, 500);
+                return;
+            }
+            // Poll for up to 15 seconds in case the bundle creates the overlay after us.
+            if (!found && ++polls < 75) {
+                setTimeout(tryDismiss, 200);
+            }
+        }
+
+        setTimeout(tryDismiss, 200);
     }
 
     // ── upload ────────────────────────────────────────────────────────────────
@@ -63,11 +86,10 @@
             } else {
                 fetch(ENDPOINT, { method: 'POST', body: form })
                     .catch(function () {
-                        // On regular fetch failure, retry once with sendBeacon.
                         navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, form);
                     });
             }
-        } catch (e) { /* silent — never disrupt the exam */ }
+        } catch (e) {}
     }
 
     function sendRecordingStart(ts, attemptid) {
@@ -96,7 +118,7 @@
             : 'video/webm';
 
         activeRecorder = new MediaRecorder(stream, {
-            mimeType: mimeType,
+            mimeType:           mimeType,
             videoBitsPerSecond: VIDEO_BITRATE,
         });
 
@@ -110,7 +132,6 @@
 
         activeRecorder.start(TIMESLICE);
 
-        // Rotate to the next chunk file every CHUNK_DURATION milliseconds.
         chunkTimer = setTimeout(function () {
             if (activeRecorder && activeRecorder.state === 'recording') {
                 activeRecorder.stop();
@@ -124,11 +145,11 @@
 
     function stopRecording() {
         isUnloading = true;
-        saveChunkState(); // persist before teardown so next page inherits correct index
+        saveChunkState();
         clearTimeout(chunkTimer);
         chunkTimer = null;
         if (activeRecorder && activeRecorder.state === 'recording') {
-            activeRecorder.requestData(); // flush buffered data now, don't wait for stop()
+            activeRecorder.requestData();
             activeRecorder.stop();
         }
         activeRecorder = null;
@@ -137,10 +158,6 @@
 
     // ── start recording ───────────────────────────────────────────────────────
 
-    // Unified entry point after a stream is obtained.
-    // immediateChunkIndex: when set, skip the pre-flight network request and start
-    // recording right away using the provided chunk index.  A background pre-flight
-    // still runs to verify, but it doesn't block the recorder from starting.
     function beginRecordingFromStream(stream, immediateChunkIndex) {
         if (recordingStarted) return;
         recordingStarted = true;
@@ -148,17 +165,18 @@
         activeStream     = stream;
         var attemptid    = getAttemptId();
 
+        // Dismiss the MediaPipe loading overlay immediately — recording is ready,
+        // the student doesn't need to wait for ML model downloads to see the quiz.
+        dismissLoadingOverlay();
+
         if (immediateChunkIndex !== undefined) {
-            // Fast path: start immediately with the cached index.
             chunkIndex = immediateChunkIndex;
             startChunk(stream);
             if (immediateChunkIndex === 0) {
                 sendRecordingStart(recordingStart, attemptid);
             }
 
-            // Background pre-flight: if server reports a higher index (e.g. a chunk we
-            // didn't know about), update chunkIndex for the NEXT rotation.  Current chunk
-            // continues as-is — server-side overwrite protection handles any collision.
+            // Background pre-flight: correct chunkIndex if server knows of a higher one.
             fetch(ENDPOINT + '?mode=status&attemptid=' + attemptid + '&sesskey=' + getSesskey())
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
@@ -169,7 +187,6 @@
                 })
                 .catch(function () {});
         } else {
-            // Standard path: wait for pre-flight before starting (attempt.php first load).
             fetch(ENDPOINT + '?mode=status&attemptid=' + attemptid + '&sesskey=' + getSesskey())
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
@@ -188,11 +205,6 @@
         window.addEventListener('beforeunload', stopRecording);
     }
 
-    // Primary recording entry point.
-    // On summary.php: use cached chunk index (minimum 1) so recording starts
-    // immediately — no network round-trip, no race condition with fast submits.
-    // On attempt.php: use cached index as immediate start; background pre-flight
-    // corrects it if needed.
     function startDirectRecording(isSummary) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             waitForMediaPipeStream();
@@ -204,13 +216,11 @@
                 beginRecordingFromStream(stream, immediateChunk);
             })
             .catch(function () {
-                // getUserMedia denied/failed — fall back to MediaPipe stream.
                 waitForMediaPipeStream();
             });
     }
 
-    // Fallback: wait for MediaPipe's <video id="timadey-webcam"> element.
-    // Only reached when getUserMedia itself is unavailable or denied.
+    // Fallback: only reached if getUserMedia is denied/unavailable.
     function waitForMediaPipeStream() {
         var video = document.getElementById('timadey-webcam');
         if (video && video.srcObject && video.readyState >= 2) {
