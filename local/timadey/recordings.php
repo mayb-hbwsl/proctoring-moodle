@@ -18,16 +18,11 @@ if (!is_dir($tmp_dir)) mkdir($tmp_dir, 0755, true);
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function timadey_find_ffmpeg() {
-    // Admin-configured path takes priority.
-    $configured = get_config('local_timadey', 'ffmpeg_path');
-    if (!empty($configured) && file_exists($configured)) return $configured;
-
     $candidates = [
+        'C:/Users/msacc/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.1-full_build/bin/ffmpeg.exe',
         '/usr/bin/ffmpeg',
         '/usr/local/bin/ffmpeg',
         '/opt/ffmpeg/bin/ffmpeg',
-        'C:/ffmpeg/bin/ffmpeg.exe',
-        'C:/Program Files/ffmpeg/bin/ffmpeg.exe',
     ];
     foreach ($candidates as $p) {
         if (file_exists($p)) return $p;

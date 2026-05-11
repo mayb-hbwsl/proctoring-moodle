@@ -1,6 +1,13 @@
 (function () {
     'use strict';
 
+    // On a resume (question navigation within the same attempt), the PHP layer has
+    // already hidden the loading overlay via CSS. Remove the body lock class instantly
+    // so the quiz is interactive while the camera reconnects in the background.
+    if (window.timadeyIsResume) {
+        document.body.classList.remove('timadey-locked');
+    }
+
     var ENDPOINT       = '/local/timadey/save_recording.php';
     var LOG_ENDPOINT   = '/local/timadey/log_incident.php';
     var CHUNK_DURATION = 300000; // rotate to a new chunk file every 5 minutes
@@ -22,11 +29,19 @@
     }
 
     function getAttemptId() {
+        // Highest priority: PHP-injected ID — works for both standard quiz (?attempt=X)
+        // and adaptive quiz (?cmid=X) where the URL has no attempt param.
+        if (window.timadeyAttemptId && window.timadeyAttemptId > 0) {
+            try { localStorage.setItem('timadey_attemptid', String(window.timadeyAttemptId)); } catch (e) {}
+            return window.timadeyAttemptId;
+        }
+        // Standard quiz fallback when PHP global is absent.
         var fromUrl = parseInt(new URLSearchParams(window.location.search).get('attempt')) || 0;
         if (fromUrl > 0) {
             try { localStorage.setItem('timadey_attemptid', String(fromUrl)); } catch (e) {}
             return fromUrl;
         }
+        // Last resort: cached value from a previous page in the same attempt.
         try { return parseInt(localStorage.getItem('timadey_attemptid') || '0') || 0; } catch (e) { return 0; }
     }
 

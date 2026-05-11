@@ -80,21 +80,27 @@ if (!adaptivequiz_allowed_attempt($adaptivequiz->attempts, $count)) {
 
 // ── Safe Exam Browser check ───────────────────────────────────────────────────
 if (!empty($adaptivequiz->requireseb)) {
+    global $FULLME;
+
+    // SEB always identifies itself in the User-Agent string.
+    // The hash headers are only present when a Browser Exam Key is configured.
     $sebRequestHash = $_SERVER['HTTP_X_SAFEEXAMBROWSER_REQUESTHASH'] ?? '';
-    $sebConfigHash  = $_SERVER['HTTP_X_SAFEEXAMBROWSER_CONFIGKEYHASH'] ?? '';
-    $usingSeb       = !empty($sebRequestHash) || !empty($sebConfigHash);
+    $usingSeb = (isset($_SERVER['HTTP_USER_AGENT']) && strpos($_SERVER['HTTP_USER_AGENT'], 'SEB') !== false)
+             || !empty($sebRequestHash)
+             || !empty($_SERVER['HTTP_X_SAFEEXAMBROWSER_CONFIGKEYHASH'] ?? '');
 
     $keyValid = true;
     if ($usingSeb && (int)$adaptivequiz->requireseb === 2 && !empty($adaptivequiz->sebkeys)) {
-        // Validate the Browser Exam Key: SEB sends SHA256(url + key) as the request hash.
+        // Validate Browser Exam Key: SEB sends SHA256(fullURL + BrowserExamKey).
+        // Use $FULLME so the URL including all query params matches exactly what SEB hashed.
         $keyValid = false;
-        $currentUrl = strtolower((string)(new moodle_url('/mod/adaptivequiz/attempt.php',
-            ['cmid' => $id])));
+        $currentUrl = strtolower($FULLME ?? (new moodle_url('/mod/adaptivequiz/attempt.php', ['cmid' => $id]))->out(false));
         foreach (preg_split('/[\r\n]+/', trim($adaptivequiz->sebkeys)) as $configuredKey) {
             $configuredKey = trim($configuredKey);
-            if ($configuredKey === '') continue;
-            $expected = hash('sha256', $currentUrl . $configuredKey);
-            if (hash_equals($expected, strtolower($sebRequestHash))) {
+            if ($configuredKey === '') {
+                continue;
+            }
+            if (hash_equals(hash('sha256', $currentUrl . $configuredKey), strtolower($sebRequestHash))) {
                 $keyValid = true;
                 break;
             }
@@ -102,20 +108,25 @@ if (!empty($adaptivequiz->requireseb)) {
     }
 
     if (!$usingSeb || !$keyValid) {
-        $currentUrl = (new moodle_url('/mod/adaptivequiz/attempt.php', ['cmid' => $id]))->out(false);
-        $sebUrl     = preg_replace('/^https?:\/\//i', 'sebs://', $currentUrl);
+        $viewUrl = (new moodle_url('/mod/adaptivequiz/view.php', ['id' => $id]))->out(false);
+        $seblaunchUrl = new moodle_url('/mod/adaptivequiz/seb_config.php', ['cmid' => $id]);
+        $seblaunchUrl->set_scheme(is_https() ? 'sebs' : 'seb');
+
         echo $OUTPUT->header();
-        echo $OUTPUT->box(
-            '<h3 style="margin-top:0">Safe Exam Browser Required</h3>'
-            . '<p>This quiz must be opened using the Safe Exam Browser application.</p>'
+        echo html_writer::div(
+            html_writer::tag('h3', get_string('sebrequired', 'adaptivequiz'), ['class' => 'mt-0'])
             . ($keyValid === false && $usingSeb
-                ? '<p style="color:#dc3545">⚠ Safe Exam Browser detected but the Browser Exam Key is invalid. '
-                  . 'Make sure you are using the correct SEB configuration for this quiz.</p>'
-                : '<p><a href="' . s($sebUrl) . '" class="btn btn-primary">Launch in Safe Exam Browser</a></p>'
+                ? html_writer::tag('p',
+                    html_writer::tag('strong', '&#9888; ' . get_string('sebinvalidkey', 'adaptivequiz')),
+                    ['class' => 'text-danger'])
+                : html_writer::tag('p', get_string('sebnotdetected', 'adaptivequiz'))
+                  . html_writer::tag('div',
+                      html_writer::link($seblaunchUrl->out(false), get_string('seblaunchbtn', 'adaptivequiz'),
+                          ['class' => 'btn btn-primary']),
+                      ['class' => 'text-center my-3'])
               )
-            . '<p><a href="' . s((new moodle_url('/mod/adaptivequiz/view.php', ['id' => $id]))->out(false))
-            . '">← Return to quiz page</a></p>',
-            'generalbox', 'seb-required'
+            . html_writer::tag('p', html_writer::link($viewUrl, '&#8592; ' . get_string('backtoquiz', 'adaptivequiz'))),
+            'generalbox p-4'
         );
         echo $OUTPUT->footer();
         exit;
@@ -307,6 +318,10 @@ $PAGE->requires->js_init_call('M.mod_adaptivequiz.init_attempt_form', array($vie
 if (!empty($adaptivequiz->browsersecurity)) {
     $PAGE->blocks->show_only_fake_blocks();
     $output->init_browser_security();
+} else if (!empty($adaptivequiz->requireseb)) {
+    // SEB mode: apply secure layout to block all navigation during the attempt.
+    $PAGE->set_pagelayout('secure');
+    $PAGE->blocks->show_only_fake_blocks();
 } else {
     $PAGE->set_heading(format_string($course->fullname));
 }

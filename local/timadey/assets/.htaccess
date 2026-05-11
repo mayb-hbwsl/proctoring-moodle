@@ -1,0 +1,14 @@
+AddType application/wasm .wasm
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(wasm|task|tflite)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    <FilesMatch "\.(js|css)$">
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/javascript application/javascript
+</IfModule>
