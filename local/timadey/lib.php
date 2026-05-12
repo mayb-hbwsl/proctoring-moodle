@@ -19,7 +19,7 @@ function local_timadey_inject_assets() {
 
     $url = $_SERVER['REQUEST_URI'] ?? '';
 
-    $on_attempt  = strpos($url, 'attempt.php')          !== false;
+    $on_attempt  = strpos($url, '/mod/adaptivequiz/attempt.php') !== false;
     $on_summary  = strpos($url, '/mod/quiz/summary.php') !== false;
 
     if (!$on_attempt && !$on_summary) return;

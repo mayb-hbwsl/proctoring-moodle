@@ -180,9 +180,11 @@
         activeStream     = stream;
         var attemptid    = getAttemptId();
 
-        // Dismiss the MediaPipe loading overlay immediately — recording is ready,
-        // the student doesn't need to wait for ML model downloads to see the quiz.
-        dismissLoadingOverlay();
+        // The bundle dismisses the loading overlay itself once BOTH the camera
+        // and AI models are fully ready — do not dismiss it here prematurely.
+        // Safety fallback: if the overlay is still up after 45 s (bundle failed),
+        // remove it so the student is not permanently stuck on the loading screen.
+        setTimeout(function () { dismissLoadingOverlay(); }, 45000);
 
         if (immediateChunkIndex !== undefined) {
             chunkIndex = immediateChunkIndex;
