@@ -79,7 +79,9 @@ if (!adaptivequiz_allowed_attempt($adaptivequiz->attempts, $count)) {
 }
 
 // ── Safe Exam Browser check ───────────────────────────────────────────────────
-if (!empty($adaptivequiz->requireseb)) {
+$sebua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$sebossupported = stripos($sebua, 'Windows') !== false || stripos($sebua, 'Macintosh') !== false;
+if (!empty($adaptivequiz->requireseb) && $sebossupported) {
     global $FULLME;
 
     // SEB always identifies itself in the User-Agent string.
