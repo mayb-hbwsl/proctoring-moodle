@@ -73,6 +73,13 @@ class attempt_report_helper {
             $tags = core_tag_tag::get_item_tags_array('core_question', 'question', $question->id);
             $difficulty = adaptivequiz_get_difficulty_from_tags($tags);
 
+            if (!isset($data[$difficulty])) {
+                $dataitem = new stdClass();
+                $dataitem->numcorrect = 0;
+                $dataitem->numwrong = 0;
+                $data[$difficulty] = $dataitem;
+            }
+
             $answeredcorrectly = $quba->get_question_mark($slot) > 0;
             $answeredcorrectly ? $data[$difficulty]->numcorrect++ : $data[$difficulty]->numwrong++;
         }
