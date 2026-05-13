@@ -164,6 +164,19 @@ final class users_attempts_table extends table_sql {
      *
      * @param stdClass $row
      */
+    protected function col_latestscore(stdClass $row): string {
+        if (empty($row->latestattemptid)) {
+            return '-';
+        }
+        $result = attempt_report_helper::calculate_attempt_score((int) $row->latestattemptid);
+        return $result['score'] . ' / ' . $result['total'] . ' (' . $result['percent'] . '%)';
+    }
+
+    /**
+     * Formats the column's value.
+     *
+     * @param stdClass $row
+     */
     protected function col_attempttimefinished(stdClass $row): string {
         return intval($row->attempttimefinished)
             ? userdate($row->attempttimefinished)
@@ -179,7 +192,7 @@ final class users_attempts_table extends table_sql {
      */
     private function init(moodle_url $baseurl, context $context, filter $filter): void {
         $this->define_columns([
-            'fullname', 'email', 'attemptsnum', 'measure', 'stderror', 'score', 'attempttimefinished',
+            'fullname', 'email', 'attemptsnum', 'measure', 'stderror', 'score', 'latestscore', 'attempttimefinished',
         ]);
         $this->define_headers([
             get_string('fullname'),
@@ -188,6 +201,7 @@ final class users_attempts_table extends table_sql {
             get_string('bestscore', 'adaptivequiz'),
             get_string('bestscorestderror', 'adaptivequiz'),
             get_string('attemptscore', 'adaptivequiz'),
+            get_string('attemptlatestscore', 'adaptivequiz'),
             get_string('attemptfinishedtimestamp', 'adaptivequiz'),
         ]);
         $this->define_baseurl($baseurl);
@@ -210,5 +224,6 @@ final class users_attempts_table extends table_sql {
         $this->column_class['measure'] .= ' text-center';
         $this->column_class['stderror'] .= ' text-center';
         $this->column_class['score'] .= ' text-center';
+        $this->column_class['latestscore'] .= ' text-center';
     }
 }

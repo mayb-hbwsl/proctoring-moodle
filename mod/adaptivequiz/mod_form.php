@@ -207,15 +207,13 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
         $mform->setType('maximumquestions', PARAM_INT);
         $mform->hideIf('maximumquestions', 'fixedquestions', 'neq', '0');
 
-        $mform->hideIf('standarderror', 'fixedquestions', 'neq', '0');
-
         $mform->addElement('text', 'standarderror', get_string('standarderror', 'adaptivequiz'),
             ['size' => '10', 'maxlength' => '10']);
         $mform->addHelpButton('standarderror', 'standarderror', 'adaptivequiz');
-        $mform->addRule('standarderror', get_string('formelementempty', 'adaptivequiz'), 'required', null, 'client');
         $mform->addRule('standarderror', get_string('formelementdecimal', 'adaptivequiz'), 'numeric', null, 'client');
         $mform->setDefault('standarderror', 5.0);
         $mform->setType('standarderror', PARAM_FLOAT);
+        $mform->hideIf('standarderror', 'fixedquestions', 'neq', '0');
 
         // Grade settings.
         $this->standard_grading_coursemodule_elements();
