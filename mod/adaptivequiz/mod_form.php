@@ -186,19 +186,28 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
 
         $mform->addElement('header', 'stopingconditionshdr', get_string('stopingconditionshdr', 'adaptivequiz'));
 
+        $mform->addElement('text', 'fixedquestions', get_string('fixedquestions', 'adaptivequiz'),
+            ['size' => '3', 'maxlength' => '3']);
+        $mform->addHelpButton('fixedquestions', 'fixedquestions', 'adaptivequiz');
+        $mform->addRule('fixedquestions', get_string('formelementnumeric', 'adaptivequiz'), 'numeric', null, 'client');
+        $mform->setDefault('fixedquestions', 0);
+        $mform->setType('fixedquestions', PARAM_INT);
+
         $mform->addElement('text', 'minimumquestions', get_string('minimumquestions', 'adaptivequiz'),
             ['size' => '3', 'maxlength' => '3']);
         $mform->addHelpButton('minimumquestions', 'minimumquestions', 'adaptivequiz');
-        $mform->addRule('minimumquestions', get_string('formelementempty', 'adaptivequiz'), 'required', null, 'client');
         $mform->addRule('minimumquestions', get_string('formelementnumeric', 'adaptivequiz'), 'numeric', null, 'client');
         $mform->setType('minimumquestions', PARAM_INT);
+        $mform->hideIf('minimumquestions', 'fixedquestions', 'neq', '0');
 
         $mform->addElement('text', 'maximumquestions', get_string('maximumquestions', 'adaptivequiz'),
             ['size' => '3', 'maxlength' => '3']);
         $mform->addHelpButton('maximumquestions', 'maximumquestions', 'adaptivequiz');
-        $mform->addRule('maximumquestions', get_string('formelementempty', 'adaptivequiz'), 'required', null, 'client');
         $mform->addRule('maximumquestions', get_string('formelementnumeric', 'adaptivequiz'), 'numeric', null, 'client');
         $mform->setType('maximumquestions', PARAM_INT);
+        $mform->hideIf('maximumquestions', 'fixedquestions', 'neq', '0');
+
+        $mform->hideIf('standarderror', 'fixedquestions', 'neq', '0');
 
         $mform->addElement('text', 'standarderror', get_string('standarderror', 'adaptivequiz'),
             ['size' => '10', 'maxlength' => '10']);
@@ -286,13 +295,21 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
             $errors['questionpool'] = get_string('formquestionpool', 'adaptivequiz');
         }
 
-        // Validate for positivity.
-        if (0 >= $data['minimumquestions']) {
-            $errors['minimumquestions'] = get_string('formelementnegative', 'adaptivequiz');
-        }
+        $usingfixed = isset($data['fixedquestions']) && (int) $data['fixedquestions'] > 0;
 
-        if (0 >= $data['maximumquestions']) {
-            $errors['maximumquestions'] = get_string('formelementnegative', 'adaptivequiz');
+        if ($usingfixed) {
+            if ((int) $data['fixedquestions'] <= 0) {
+                $errors['fixedquestions'] = get_string('formelementnegative', 'adaptivequiz');
+            }
+        } else {
+            // Validate for positivity.
+            if (0 >= $data['minimumquestions']) {
+                $errors['minimumquestions'] = get_string('formelementnegative', 'adaptivequiz');
+            }
+
+            if (0 >= $data['maximumquestions']) {
+                $errors['maximumquestions'] = get_string('formelementnegative', 'adaptivequiz');
+            }
         }
 
         if (0 >= $data['startinglevel']) {
@@ -312,7 +329,7 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
         }
 
         // Validate higher and lower values.
-        if ($data['minimumquestions'] >= $data['maximumquestions']) {
+        if (!$usingfixed && $data['minimumquestions'] >= $data['maximumquestions']) {
             $errors['minimumquestions'] = get_string('formminquestgreaterthan', 'adaptivequiz');
         }
 
