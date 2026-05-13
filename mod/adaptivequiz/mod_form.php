@@ -324,7 +324,7 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
         }
 
         // Validate higher and lower values.
-        if (!$usingfixed && $data['minimumquestions'] >= $data['maximumquestions']) {
+        if (!$usingfixed && $data['minimumquestions'] > $data['maximumquestions']) {
             $errors['minimumquestions'] = get_string('formminquestgreaterthan', 'adaptivequiz');
         }
 
