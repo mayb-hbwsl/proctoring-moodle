@@ -195,6 +195,7 @@ $string['attemptclosed'] = 'The attempt has been manually closed.';
 $string['errorclosingattempt_alreadycomplete'] = 'This attempt is already complete, it cannot be manually closed.';
 $string['formstderror'] = 'Must enter a percent less than 50 and greater than or equal to 0';
 $string['score'] = 'Score';
+$string['attemptscore'] = 'Score (scored/total %)';
 $string['bestscore'] = 'Best Score';
 $string['bestscorestderror'] = 'Standard Error';
 $string['attempt_questiondetails'] = 'Question Details';
