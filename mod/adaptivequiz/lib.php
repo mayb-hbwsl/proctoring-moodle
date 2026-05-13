@@ -121,15 +121,11 @@ function adaptivequiz_add_instance(stdClass $adaptivequiz, mod_adaptivequiz_mod_
     $adaptivequiz->attemptfeedback = $attemptfeedbacktext;
     $adaptivequiz->attemptfeedbackformat = $attemptfeedbackformat;
 
-    // When fixed questions is set, min/max fields are hidden and arrive as 0. Use fixedquestions as fallback.
+    // When fixed questions is set, enforce min=max=fixedquestions so the quiz runs exactly that many questions.
     if (!empty($adaptivequiz->fixedquestions) && (int) $adaptivequiz->fixedquestions > 0) {
         $fixedcount = (int) $adaptivequiz->fixedquestions;
-        if (empty($adaptivequiz->minimumquestions)) {
-            $adaptivequiz->minimumquestions = $fixedcount;
-        }
-        if (empty($adaptivequiz->maximumquestions)) {
-            $adaptivequiz->maximumquestions = $fixedcount;
-        }
+        $adaptivequiz->minimumquestions = $fixedcount;
+        $adaptivequiz->maximumquestions = $fixedcount;
     }
 
     $instance = $DB->insert_record('adaptivequiz', $adaptivequiz);
@@ -218,12 +214,11 @@ function adaptivequiz_update_instance(stdClass $adaptivequiz, mod_adaptivequiz_m
         $adaptivequiz->attemptfeedbackformat = $adaptivequiz->attemptfeedbackeditor['format'];
     }
 
-    // When fixed questions is set, min/max fields are hidden and arrive as 0.
-    // Preserve the old DB values so the algorithm still functions; if they were already zeroed, fall back to fixedquestions.
+    // When fixed questions is set, enforce min=max=fixedquestions so the quiz runs exactly that many questions.
     if (!empty($adaptivequiz->fixedquestions) && (int) $adaptivequiz->fixedquestions > 0) {
         $fixedcount = (int) $adaptivequiz->fixedquestions;
-        $adaptivequiz->minimumquestions = ((int) $oldquiz->minimumquestions > 0) ? (int) $oldquiz->minimumquestions : $fixedcount;
-        $adaptivequiz->maximumquestions = ((int) $oldquiz->maximumquestions > 0) ? (int) $oldquiz->maximumquestions : $fixedcount;
+        $adaptivequiz->minimumquestions = $fixedcount;
+        $adaptivequiz->maximumquestions = $fixedcount;
     }
 
     $instanceid = $DB->update_record('adaptivequiz', $adaptivequiz);

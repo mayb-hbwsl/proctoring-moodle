@@ -210,19 +210,6 @@ if (!empty($uniqueid) && confirm_sesskey()) {
                 throw new moodle_exception('unableupdatediffsum', 'adaptivequiz', $url);
             }
 
-            // Check if fixed number of questions has been reached.
-            if (!empty($adaptivequiz->fixedquestions) && (int) $adaptivequiz->fixedquestions > 0) {
-                $newquestionsattempted = (int) $attemptrec->questionsattempted + 1;
-                if ($newquestionsattempted >= (int) $adaptivequiz->fixedquestions) {
-                    $standarderror = $algo->get_standarderror();
-                    adaptivequiz_complete_attempt($uniqueid, $adaptivequiz, $context, $USER->id, $standarderror,
-                        get_string('fixedquestionsreached', 'adaptivequiz'));
-                    $param = array('cmid' => $cm->id, 'id' => $cm->instance, 'uattid' => $uniqueid);
-                    $url = new moodle_url('/mod/adaptivequiz/attemptfinished.php', $param);
-                    redirect($url);
-                }
-            }
-
             // Check whether the status property is empty.
             $message = $algo->get_status();
 
@@ -356,11 +343,8 @@ if (!empty($adaptivequiz->password) && empty($condition)) {
     $attemptrecord = $adaptiveattempt->get_attempt();
 
     if ($adaptivequiz->showattemptprogress) {
-        $progressmax = (!empty($adaptivequiz->fixedquestions) && (int) $adaptivequiz->fixedquestions > 0)
-            ? (int) $adaptivequiz->fixedquestions
-            : (int) $adaptivequiz->maximumquestions;
         echo $output->container_start('attempt-progress-container');
-        echo $output->attempt_progress($attemptrecord->questionsattempted, $progressmax);
+        echo $output->attempt_progress($attemptrecord->questionsattempted, (int) $adaptivequiz->maximumquestions);
         echo $output->container_end();
     }
 
