@@ -256,6 +256,7 @@ final class sql_and_params {
      */
     private static function attempt_fields(): string {
         return 'aa.id AS attemptid,
+            aa.instance AS instanceid,
             aa.measure,
             aa.standarderror AS stderror,
             aa.timemodified AS attempttimefinished,

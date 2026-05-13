@@ -18,6 +18,7 @@ namespace mod_adaptivequiz\local\report\users_attempts;
 
 use context;
 use html_writer;
+use mod_adaptivequiz\local\attempt\attempt_state;
 use mod_adaptivequiz\local\report\attempt_report_helper;
 use mod_adaptivequiz\local\report\questions_difficulty_range;
 use mod_adaptivequiz\local\report\users_attempts\filter\filter;
@@ -146,17 +147,51 @@ final class users_attempts_table extends table_sql {
         return html_entity_decode($rendered, ENT_QUOTES, 'UTF-8');
     }
 
+    /** @var array Cache of best score per "userid_instanceid" key to avoid recomputing per row. */
+    private static $bestscorecache = [];
+
     /**
-     * Formats the column's value.
+     * Formats the column's value — shows the highest weighted-percentage score across all completed attempts.
      *
      * @param stdClass $row
      */
     protected function col_score(stdClass $row): string {
-        if (empty($row->attemptid)) {
+        global $DB;
+
+        if (empty($row->instanceid)) {
             return '-';
         }
-        $result = attempt_report_helper::calculate_attempt_score((int) $row->attemptid);
-        return $result['score'] . ' / ' . $result['total'] . ' (' . $result['percent'] . '%)';
+
+        $cachekey = $row->id . '_' . $row->instanceid;
+        if (!array_key_exists($cachekey, self::$bestscorecache)) {
+            $attemptids = $DB->get_fieldset_select(
+                'adaptivequiz_attempt',
+                'id',
+                'userid = :userid AND instance = :instance AND attemptstate = :state',
+                ['userid' => $row->id, 'instance' => $row->instanceid, 'state' => attempt_state::COMPLETED]
+            );
+
+            $best = null;
+            $bestpercent = -1.0;
+            foreach ($attemptids as $id) {
+                try {
+                    $result = attempt_report_helper::calculate_attempt_score((int) $id);
+                    if ($result['percent'] > $bestpercent) {
+                        $bestpercent = (float) $result['percent'];
+                        $best = $result;
+                    }
+                } catch (\Exception $e) {
+                    // Skip attempts that cannot be scored.
+                }
+            }
+            self::$bestscorecache[$cachekey] = $best;
+        }
+
+        $best = self::$bestscorecache[$cachekey];
+        if ($best === null) {
+            return '-';
+        }
+        return $best['score'] . ' / ' . $best['total'] . ' (' . $best['percent'] . '%)';
     }
 
     /**
