@@ -196,21 +196,18 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
         $mform->addElement('text', 'minimumquestions', get_string('minimumquestions', 'adaptivequiz'),
             ['size' => '3', 'maxlength' => '3']);
         $mform->addHelpButton('minimumquestions', 'minimumquestions', 'adaptivequiz');
-        $mform->addRule('minimumquestions', get_string('formelementnumeric', 'adaptivequiz'), 'numeric', null, 'client');
         $mform->setType('minimumquestions', PARAM_INT);
         $mform->hideIf('minimumquestions', 'fixedquestions', 'neq', '0');
 
         $mform->addElement('text', 'maximumquestions', get_string('maximumquestions', 'adaptivequiz'),
             ['size' => '3', 'maxlength' => '3']);
         $mform->addHelpButton('maximumquestions', 'maximumquestions', 'adaptivequiz');
-        $mform->addRule('maximumquestions', get_string('formelementnumeric', 'adaptivequiz'), 'numeric', null, 'client');
         $mform->setType('maximumquestions', PARAM_INT);
         $mform->hideIf('maximumquestions', 'fixedquestions', 'neq', '0');
 
         $mform->addElement('text', 'standarderror', get_string('standarderror', 'adaptivequiz'),
             ['size' => '10', 'maxlength' => '10']);
         $mform->addHelpButton('standarderror', 'standarderror', 'adaptivequiz');
-        $mform->addRule('standarderror', get_string('formelementdecimal', 'adaptivequiz'), 'numeric', null, 'client');
         $mform->setDefault('standarderror', 5.0);
         $mform->setType('standarderror', PARAM_FLOAT);
         $mform->hideIf('standarderror', 'fixedquestions', 'neq', '0');
