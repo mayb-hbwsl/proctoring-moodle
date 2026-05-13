@@ -151,5 +151,16 @@ function xmldb_adaptivequiz_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2025092704, 'adaptivequiz');
     }
 
+    if ($oldversion < 2025092705) {
+        $table = new xmldb_table('adaptivequiz');
+        $field = new xmldb_field('fixedquestions');
+
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->drop_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2025092705, 'adaptivequiz');
+    }
+
     return true;
 }

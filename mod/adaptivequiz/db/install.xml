@@ -24,7 +24,6 @@
         <FIELD NAME="lowestlevel" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The lowest difficulty level the adaptive quiz will go to."/>
         <FIELD NAME="minimumquestions" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The minimum number of questions that mus be attempted by the user"/>
         <FIELD NAME="maximumquestions" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The maximum number of question that can be attempted by the user"/>
-        <FIELD NAME="fixedquestions" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Fixed number of questions to administer. When greater than 0, overrides min/max and stops the attempt at exactly this count."/>
         <FIELD NAME="standarderror" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="0.0" SEQUENCE="false" DECIMALS="5" COMMENT="The standard error that must be met before ending the attempt."/>
         <FIELD NAME="startinglevel" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The level of difficult all attempts will start with"/>
         <FIELD NAME="grademethod" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Which of multiple attempts should be reported to the grade book. 1=highest, 3=first, 4=last."/>

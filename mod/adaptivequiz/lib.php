@@ -121,13 +121,6 @@ function adaptivequiz_add_instance(stdClass $adaptivequiz, mod_adaptivequiz_mod_
     $adaptivequiz->attemptfeedback = $attemptfeedbacktext;
     $adaptivequiz->attemptfeedbackformat = $attemptfeedbackformat;
 
-    // When fixed questions is set, enforce min=max=fixedquestions so the quiz runs exactly that many questions.
-    if (!empty($adaptivequiz->fixedquestions) && (int) $adaptivequiz->fixedquestions > 0) {
-        $fixedcount = (int) $adaptivequiz->fixedquestions;
-        $adaptivequiz->minimumquestions = $fixedcount;
-        $adaptivequiz->maximumquestions = $fixedcount;
-    }
-
     $instance = $DB->insert_record('adaptivequiz', $adaptivequiz);
 
     if (empty($instance) && is_int($instance)) {
@@ -212,13 +205,6 @@ function adaptivequiz_update_instance(stdClass $adaptivequiz, mod_adaptivequiz_m
 
         $adaptivequiz->attemptfeedback = $attemptfeedbacktext;
         $adaptivequiz->attemptfeedbackformat = $adaptivequiz->attemptfeedbackeditor['format'];
-    }
-
-    // When fixed questions is set, enforce min=max=fixedquestions so the quiz runs exactly that many questions.
-    if (!empty($adaptivequiz->fixedquestions) && (int) $adaptivequiz->fixedquestions > 0) {
-        $fixedcount = (int) $adaptivequiz->fixedquestions;
-        $adaptivequiz->minimumquestions = $fixedcount;
-        $adaptivequiz->maximumquestions = $fixedcount;
     }
 
     $instanceid = $DB->update_record('adaptivequiz', $adaptivequiz);
