@@ -124,8 +124,9 @@ final class users_attempts_table extends table_sql {
         }
 
         if (!$this->is_downloading()) {
+            $linkid = !empty($row->latestattemptid) ? $row->latestattemptid : $row->attemptid;
             return html_writer::link(
-                new moodle_url('/mod/adaptivequiz/reviewattempt.php', ['attempt' => $row->attemptid]),
+                new moodle_url('/mod/adaptivequiz/reviewattempt.php', ['attempt' => $linkid]),
                 $measure
             );
         }
