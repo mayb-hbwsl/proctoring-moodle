@@ -324,7 +324,7 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
             $errors['highestlevel'] = get_string('formelementnegative', 'adaptivequiz');
         }
 
-        if ((float) 0 > (float) $data['standarderror'] || (float) 50 <= (float) $data['standarderror']) {
+        if (!$usingfixed && ((float) 0 > (float) $data['standarderror'] || (float) 50 <= (float) $data['standarderror'])) {
             $errors['standarderror'] = get_string('formstderror', 'adaptivequiz');
         }
 
