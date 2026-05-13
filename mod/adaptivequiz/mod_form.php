@@ -219,6 +219,28 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
         $mform->setDefault('grademethod', ADAPTIVEQUIZ_GRADEHIGHEST);
         $mform->disabledIf('grademethod', 'attempts', 'eq', 1);
 
+        // ── Extra restrictions on attempts ────────────────────────────────────
+        $mform->addElement('header', 'advsecurity_header', get_string('extraattemptrestrictions', 'quiz'));
+
+        $mform->addElement(
+            'advcheckbox',
+            'advsecurity_enabled',
+            get_string('advancedsecurity', 'local_advancedsecurity'),
+            get_string('advancedsecurity_desc', 'local_advancedsecurity')
+        );
+        $mform->setDefault('advsecurity_enabled', 0);
+        $mform->addHelpButton('advsecurity_enabled', 'advancedsecurity', 'local_advancedsecurity');
+
+        if ($this->_cm) {
+            $reporturl = (new moodle_url('/local/advancedsecurity/report.php', ['cmid' => $this->_cm->id]))->out(false);
+            $mform->addElement('static', 'advsecurity_report_link', '',
+                html_writer::link($reporturl,
+                    '&#128196; ' . get_string('violationsreport', 'local_advancedsecurity'),
+                    ['class' => 'btn btn-secondary btn-sm', 'target' => '_blank']
+                )
+            );
+        }
+
         // Add standard elements, common to all modules.
         $this->standard_coursemodule_elements();
 
@@ -315,7 +337,15 @@ class mod_adaptivequiz_mod_form extends moodleform_mod {
      * @param array $defaultvalues Passed by reference, the parameter's original name is changed to meet the code style.
      */
     public function data_preprocessing(&$defaultvalues) {
+        global $DB;
+
         parent::data_preprocessing($defaultvalues);
+
+        if ($this->_cm) {
+            $defaultvalues['advsecurity_enabled'] = (int)(bool)$DB->get_field(
+                'local_advsecurity_config', 'enabled', ['cmid' => $this->_cm->id]
+            );
+        }
 
         $isnewinstance = !$this->current->instance;
         if ($isnewinstance) {
