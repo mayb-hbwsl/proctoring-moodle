@@ -102,6 +102,7 @@ class attempt_report_helper {
         $score = 0;
         $total = 0;
         foreach ($distribution as $level => $data) {
+            $level = (int) $level;
             $score += $level * $data->numcorrect;
             $total += $level * ($data->numcorrect + $data->numwrong);
         }
